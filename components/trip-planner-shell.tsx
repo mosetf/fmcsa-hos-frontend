@@ -135,43 +135,61 @@ export function TripPlannerShell() {
   }
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f8f3ec_0%,#efe4d3_44%,#e5d6bf_100%)] text-stone-900">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(181,136,63,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(49,31,16,0.12),transparent_30%),linear-gradient(180deg,#f7efe3_0%,#efdfc8_45%,#e2ccb0_100%)] text-stone-900">
       <section className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="relative overflow-hidden rounded-[2rem] border border-stone-900/8 bg-white/82 p-6 shadow-[0_24px_80px_rgba(67,52,34,0.08)] backdrop-blur md:p-8">
-          <div className="absolute inset-y-0 right-0 hidden w-1/2 bg-[radial-gradient(circle_at_top_left,rgba(149,116,69,0.18),transparent_55%),linear-gradient(135deg,rgba(255,255,255,0.2),rgba(120,96,68,0.04))] lg:block" />
-          <div className="relative grid gap-8 lg:grid-cols-[1.15fr_0.85fr]">
-            <div className="space-y-5">
-              <div className="inline-flex items-center gap-2 rounded-full border border-amber-800/10 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-900">
+        <header className="relative overflow-hidden rounded-[2.25rem] border border-stone-900/10 bg-[linear-gradient(135deg,rgba(255,251,245,0.96),rgba(247,238,224,0.88))] shadow-[0_28px_90px_rgba(67,52,34,0.12)] backdrop-blur">
+          <div className="absolute inset-0 hidden xl:block bg-[linear-gradient(90deg,transparent_0%,transparent_64%,rgba(36,24,14,0.96)_64%,rgba(12,9,7,0.98)_100%)]" />
+          <div className="absolute inset-y-0 left-[4.5rem] hidden w-px bg-stone-900/8 xl:block" />
+          <div className="relative grid gap-0 xl:grid-cols-[minmax(0,1.08fr)_24rem]">
+            <div className="grid gap-8 px-6 py-7 md:px-8 md:py-9 xl:pl-24 xl:pr-10">
+              <div className="space-y-6">
+                <div className="inline-flex items-center gap-2 rounded-full border border-amber-800/10 bg-amber-50/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-900">
                 <CompassIcon className="h-3.5 w-3.5" />
                 Dispatch workspace
               </div>
-              <div className="space-y-3">
-                <h1 className="max-w-3xl text-4xl font-semibold tracking-[-0.05em] text-stone-950 md:text-6xl">
-                  Professional trip planning with route, duty flow, and daily log visibility.
-                </h1>
-                <p className="max-w-2xl text-base leading-7 text-stone-650 md:text-lg">
-                  Submit a trip once, then review the route, stop sequence, and daily logs in a calmer step-by-step
-                  workspace.
-                </p>
+                <div className="space-y-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">FMCSA Dispatch Flow</p>
+                  <h1 className="max-w-[11ch] text-[clamp(3rem,6vw,5.6rem)] font-semibold leading-[0.92] tracking-[-0.07em] text-stone-950">
+                    Plan the trip. Review the route. Trust the log.
+                  </h1>
+                  <p className="max-w-[42rem] text-base leading-8 text-stone-700 md:text-lg">
+                    A calmer workspace for entering trip details, checking stop behavior, and reviewing daily log output
+                    without drowning the driver workflow in too many panels at once.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid gap-3 md:grid-cols-3">
+                <HeroStat eyebrow="Inputs" value="4 key trip fields" />
+                <HeroStat eyebrow="Review" value="Map, stops, and sequence" />
+                <HeroStat eyebrow="Output" value="Driver log sheets that stay readable" />
               </div>
             </div>
 
-            <div className="grid gap-3 self-start md:grid-cols-3 lg:grid-cols-1">
+            <div className="grid gap-4 px-6 py-7 text-stone-100 md:px-8 md:py-9">
+              <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/80">Control room</p>
+                <h2 className="max-w-[14ch] text-2xl font-semibold leading-tight tracking-[-0.04em] text-white">
+                  Fewer distractions. Stronger trip decisions.
+                </h2>
+              </div>
+              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
               <QuickNote
                 icon={<RouteIcon className="h-4 w-4" />}
                 title="Structured trip inputs"
-                text="Locations, cycle usage, and departure timing stay organized in a single dispatcher-friendly form."
+                text="Locations, cycle usage, and departure timing stay organized in one dispatcher-friendly form."
               />
               <QuickNote
                 icon={<MapIcon className="h-4 w-4" />}
                 title="Live route visibility"
-                text="The response panel now renders the decoded route directly on a map with clearly marked stops."
+                text="The response workspace renders the route directly on a map with clearly marked stops."
               />
               <QuickNote
                 icon={<LogIcon className="h-4 w-4" />}
                 title="Operational review"
-                text="Distance, drive time, stop sequence, and log totals are presented without exposing backend internals."
+                text="Sequence, stops, and logs can be reviewed one artifact at a time instead of all at once."
               />
+              </div>
             </div>
           </div>
         </header>
@@ -179,14 +197,14 @@ export function TripPlannerShell() {
         <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <form
             onSubmit={handleSubmit}
-            className="grid self-start gap-6 rounded-[2rem] border border-stone-900/8 bg-white/84 p-6 shadow-[0_18px_70px_rgba(67,52,34,0.08)] backdrop-blur md:p-7 xl:sticky xl:top-6"
+            className="grid self-start gap-6 rounded-[2rem] border border-stone-900/8 bg-[linear-gradient(180deg,rgba(255,252,246,0.94),rgba(249,242,230,0.9))] p-6 shadow-[0_22px_80px_rgba(67,52,34,0.1)] backdrop-blur md:p-7 xl:sticky xl:top-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">Trip request</p>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">Plan a new route</h2>
+                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">Build a dispatch-ready trip</h2>
               </div>
-              <div className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-50">
+              <div className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-50 shadow-[0_10px_26px_rgba(17,12,8,0.12)]">
                 HOS ready
               </div>
             </div>
@@ -239,7 +257,7 @@ export function TripPlannerShell() {
               />
             </div>
 
-            <div className="grid gap-3 rounded-[1.5rem] border border-stone-200 bg-stone-50 px-4 py-4 text-sm text-stone-600 sm:grid-cols-3">
+            <div className="grid gap-3 rounded-[1.5rem] border border-stone-900/8 bg-white/70 px-4 py-4 text-sm text-stone-600 sm:grid-cols-3">
               <HelperPill icon={<ShieldIcon className="h-4 w-4" />} text="70-hour cycle constrained" />
               <HelperPill icon={<ClockIcon className="h-4 w-4" />} text="Immediate scheduling preview" />
               <HelperPill icon={<MapIcon className="h-4 w-4" />} text="Map-ready route output" />
@@ -266,12 +284,12 @@ export function TripPlannerShell() {
             ) : null}
           </form>
 
-          <section className="grid self-start gap-5 rounded-[2rem] border border-stone-900/8 bg-[#201812] p-6 text-stone-100 shadow-[0_24px_90px_rgba(55,40,24,0.18)] md:p-7">
+          <section className="grid self-start gap-5 rounded-[2rem] border border-stone-900/8 bg-[linear-gradient(180deg,#231810_0%,#2f2118_100%)] p-6 text-stone-100 shadow-[0_28px_90px_rgba(55,40,24,0.22)] md:p-7">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">Trip summary</p>
                 <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-50">
-                  Route and duty-status review
+                  Route and compliance workspace
                 </h2>
               </div>
               <div className="rounded-full border border-stone-700 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-300">
@@ -314,7 +332,7 @@ export function TripPlannerShell() {
                   />
                 </div>
 
-                <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                <div className="grid gap-4 rounded-[1.7rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 sm:p-5">
                   <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                     <div className="space-y-1">
                       <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">Result workspace</p>
@@ -425,7 +443,7 @@ export function TripPlannerShell() {
                 </div>
 
                 {activeView === "logs" ? (
-                  <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                  <div className="grid gap-4 rounded-[1.7rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 sm:p-5">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                       <SectionHeading
                         icon={<GridIcon className="h-4 w-4 text-amber-300" />}
@@ -448,8 +466,8 @@ export function TripPlannerShell() {
                 <div className="space-y-2">
                   <p className="text-lg font-semibold text-stone-50">Results appear here after submission</p>
                   <p className="mx-auto max-w-md text-sm leading-7 text-stone-400">
-                    Review the route map, trip sequence, and early daily log summary here once the planner response is
-                    available.
+                    Map output, stop flow, and daily log review will load into this workspace once the planner response
+                    is available.
                   </p>
                 </div>
               </div>
@@ -502,7 +520,7 @@ function Field({
 
 function QuickNote({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-stone-900/8 bg-stone-950 px-4 py-4 text-stone-100 shadow-[0_18px_45px_rgba(35,26,18,0.16)]">
+    <div className="rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-4 text-stone-100 shadow-[0_18px_45px_rgba(15,10,7,0.12)]">
       <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/12 text-amber-200">
         {icon}
       </div>
@@ -561,7 +579,7 @@ function SectionHeading({
 
 function HelperPill({ icon, text }: { icon: React.ReactNode; text: string }) {
   return (
-    <div className="flex items-center gap-2 rounded-full bg-white px-3 py-2 text-sm text-stone-700 shadow-[inset_0_0_0_1px_rgba(91,74,52,0.08)]">
+    <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-sm text-stone-700 shadow-[inset_0_0_0_1px_rgba(91,74,52,0.08)]">
       <span className="text-stone-900">{icon}</span>
       <span>{text}</span>
     </div>
@@ -570,12 +588,21 @@ function HelperPill({ icon, text }: { icon: React.ReactNode; text: string }) {
 
 function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
-    <div className="rounded-[1.4rem] border border-white/7 bg-white/[0.05] p-4">
+    <div className="rounded-[1.4rem] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4">
       <div className="flex items-center justify-between gap-3">
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{label}</p>
         <span className="text-amber-200">{icon}</span>
       </div>
       <p className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-stone-50">{value}</p>
+    </div>
+  );
+}
+
+function HeroStat({ eyebrow, value }: { eyebrow: string; value: string }) {
+  return (
+    <div className="rounded-[1.35rem] border border-stone-900/8 bg-white/66 px-4 py-4 shadow-[0_12px_28px_rgba(67,52,34,0.06)]">
+      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{eyebrow}</p>
+      <p className="mt-2 text-sm font-medium leading-6 text-stone-800">{value}</p>
     </div>
   );
 }
