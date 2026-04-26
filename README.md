@@ -1,18 +1,14 @@
 # FMCSA HOS Frontend
 
-Next.js frontend for trip input, backend submission, route preview, and FMCSA log presentation.
+Next.js frontend for trip input, backend submission, route review, and FMCSA log presentation.
 
 ## Current Scope
 
-Phase 5 is implemented here:
-- versioned backend API submission
-- inline backend error handling
-- visible loading state
-- compact response preview for route, segments, and log sheets
-
-Phases 6 and 7 will add:
-- decoded route map rendering
-- FMCSA daily log sheet visualization
+The app currently provides:
+- trip request form for current location, pickup, dropoff, cycle hours used, and departure time
+- inline backend error handling and visible loading state
+- decoded route map rendering from the compact planner response
+- operational summary cards, duty-status sequence review, and daily log snapshot
 
 ## Environment
 
@@ -40,10 +36,4 @@ Run the app:
 
 ```bash
 npm run dev
-```
-
-The form submits to:
-
-```text
-POST /api/v1/plan-trip/?detail=compact
 ```
