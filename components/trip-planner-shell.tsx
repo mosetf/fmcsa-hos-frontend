@@ -1,506 +1,1070 @@
 "use client";
 
-import { FormEvent, startTransition, useState } from "react";
+import { FormEvent, startTransition, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 
 import { LogSheetRenderer } from "@/components/log-sheet-renderer";
-import { buildPlanTripUrl, type PlanTripRequest, type PlanTripResponse } from "@/lib/api";
+import {
+  buildPlanTripUrl,
+  type PlanTripRequest,
+  type PlanTripResponse,
+  type TripSegment,
+} from "@/lib/api";
+
+// ─── Dynamic map import (SSR disabled) ────────────────────────────────────────
 
 const TripRouteMap = dynamic(
-  () => import("@/components/trip-route-map").then((module) => module.TripRouteMap),
+  () => import("@/components/trip-route-map").then((m) => m.TripRouteMap),
   {
     ssr: false,
     loading: () => (
-      <div className="flex min-h-[24rem] items-center justify-center rounded-[1.7rem] border border-white/8 bg-black/10 px-6 py-10 text-sm text-stone-400">
-        Rendering route map...
-      </div>
+      <MapPlaceholder>
+        <Spinner size={20} />
+        <span style={{ fontFamily: "var(--font-mono)", fontSize: "12px", color: "var(--text-muted)" }}>
+          Loading map…
+        </span>
+      </MapPlaceholder>
     ),
-  },
+  }
 );
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
 
 type FormState = {
   current_location: string;
-  pickup_location: string;
+  pickup_location:  string;
   dropoff_location: string;
   cycle_used_hours: string;
-  departure_date: string;
-  departure_time: string;
+  departure_date:   string;
+  departure_time:   string;
 };
 
-type ResultView = "map" | "sequence" | "stops" | "logs";
+type ResultTab = "map" | "sequence" | "stops" | "logs";
 
-const INITIAL_FORM: FormState = {
-  current_location: "Chicago, IL",
-  pickup_location: "Indianapolis, IN",
-  dropoff_location: "Nashville, TN",
-  cycle_used_hours: "0",
-  departure_date: "2024-04-26",
-  departure_time: "06:00",
+// ─── Status config ────────────────────────────────────────────────────────────
+
+const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
+  DRIVING:             { color: "#D97706", label: "Driving" },
+  ON_DUTY_NOT_DRIVING: { color: "#0E7490", label: "On Duty" },
+  OFF_DUTY:            { color: "#374B6E", label: "Off Duty" },
+  SLEEPER_BERTH:       { color: "#5B21B6", label: "Sleeper" },
 };
 
-/** Convert the editable form state into the backend trip planner payload. */
-function toRequestPayload(form: FormState): PlanTripRequest {
+const WAYPOINT_COLORS: Record<string, string> = {
+  current: "#F5A623",
+  pickup:  "#22C55E",
+  dropoff: "#EF4444",
+  fuel:    "#FB923C",
+  rest:    "#6B7A9B",
+};
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function todayString() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function toPayload(f: FormState): PlanTripRequest {
   return {
-    current_location: form.current_location.trim(),
-    pickup_location: form.pickup_location.trim(),
-    dropoff_location: form.dropoff_location.trim(),
-    cycle_used_hours: Number(form.cycle_used_hours),
-    departure_datetime: `${form.departure_date}T${form.departure_time}:00`,
+    current_location: f.current_location.trim(),
+    pickup_location:  f.pickup_location.trim(),
+    dropoff_location: f.dropoff_location.trim(),
+    cycle_used_hours: Number(f.cycle_used_hours),
+    departure_datetime: `${f.departure_date}T${f.departure_time}:00`,
   };
 }
 
-/** Normalize backend error payloads into a readable inline message. */
-function formatApiError(payload: unknown): string {
-  if (!payload || typeof payload !== "object") {
-    return "The planner request failed.";
-  }
-
-  const maybeError = (payload as { error?: { message?: unknown } }).error;
-  if (typeof maybeError?.message === "string") {
-    return maybeError.message;
-  }
-
-  if (maybeError?.message && typeof maybeError.message === "object") {
-    return JSON.stringify(maybeError.message);
-  }
-
-  return "The planner request failed.";
+function errorMessage(payload: unknown): string {
+  if (!payload || typeof payload !== "object") return "Request failed.";
+  const e = (payload as { error?: { message?: unknown } }).error;
+  if (typeof e?.message === "string") return e.message;
+  if (e?.message) return JSON.stringify(e.message);
+  return "Request failed.";
 }
 
-/** Count segments matching the exact label used by the backend planner response. */
-function countStops(segments: PlanTripResponse["trip_segments"], label: string): number {
-  return segments.filter((segment) => segment.label === label).length;
+function totalTripWindow(segs: TripSegment[]): string {
+  if (!segs.length) return "—";
+  const ms = new Date(segs.at(-1)!.end).getTime() - new Date(segs[0].start).getTime();
+  const h = ms / 3600000;
+  const days = Math.floor(h / 24);
+  const rem = (h % 24).toFixed(1);
+  return days > 0 ? `${days}d ${rem}h` : `${rem}h`;
 }
 
-/** Format trip timestamps into a concise local operational readout. */
-function formatSegmentTime(value: string): string {
-  return new Date(value).toLocaleString([], {
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
+function fmtSegTime(iso: string): string {
+  return new Date(iso).toLocaleString([], {
+    month: "short", day: "numeric",
+    hour: "2-digit", minute: "2-digit", hour12: false,
   });
 }
 
-/** Summarize the overall activity window covered by the current trip result. */
-function describeTripWindow(segments: PlanTripResponse["trip_segments"]): string {
-  if (segments.length === 0) {
-    return "No trip activity yet";
-  }
-
-  const start = new Date(segments[0].start);
-  const end = new Date(segments[segments.length - 1].end);
-  const hours = (end.getTime() - start.getTime()) / 3600000;
-  return `${hours.toFixed(1)} hr total window`;
+function countByLabel(segs: TripSegment[], label: string): number {
+  return segs.filter((s) => s.label === label).length;
 }
 
-export function TripPlannerShell() {
-  const [form, setForm] = useState<FormState>(INITIAL_FORM);
-  const [result, setResult] = useState<PlanTripResponse | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-  const [activeView, setActiveView] = useState<ResultView>("map");
+// ─── Main shell ───────────────────────────────────────────────────────────────
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    setIsLoading(true);
-    setErrorMessage(null);
+const INITIAL_FORM: FormState = {
+  current_location: "Chicago, IL",
+  pickup_location:  "Indianapolis, IN",
+  dropoff_location: "Nashville, TN",
+  cycle_used_hours: "0",
+  departure_date:   "2024-04-26",
+  departure_time:   "06:00",
+};
+
+export function TripPlannerShell() {
+  const [form, setForm]           = useState<FormState>(INITIAL_FORM);
+  const [result, setResult]       = useState<PlanTripResponse | null>(null);
+  const [error, setError]         = useState<string | null>(null);
+  const [loading, setLoading]     = useState(false);
+  const [activeTab, setActiveTab] = useState<ResultTab>("map");
+
+  // Validate before submit
+  const isValid = useMemo(() => {
+    const hrs = Number(form.cycle_used_hours);
+    return (
+      form.current_location.trim().length > 0 &&
+      form.pickup_location.trim().length > 0 &&
+      form.dropoff_location.trim().length > 0 &&
+      hrs >= 0 && hrs < 70 &&
+      form.departure_date.length > 0 &&
+      form.departure_time.length > 0
+    );
+  }, [form]);
+
+  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!isValid) return;
+    setLoading(true);
+    setError(null);
 
     try {
-      const response = await fetch(buildPlanTripUrl("compact"), {
+      const res = await fetch(buildPlanTripUrl("compact"), {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(toRequestPayload(form)),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(toPayload(form)),
       });
-
-      const payload = (await response.json()) as PlanTripResponse | { error?: { message?: unknown } };
-      if (!response.ok) {
+      const data = (await res.json()) as PlanTripResponse | { error?: unknown };
+      if (!res.ok) {
         setResult(null);
-        setErrorMessage(formatApiError(payload));
+        setError(errorMessage(data));
         return;
       }
-
       startTransition(() => {
-        setResult(payload as PlanTripResponse);
-        setActiveView((payload as PlanTripResponse).log_sheets.length > 0 ? "map" : "sequence");
+        setResult(data as PlanTripResponse);
+        setActiveTab("map");
       });
     } catch {
       setResult(null);
-      setErrorMessage("The frontend could not reach the backend API.");
+      setError("Could not reach the backend API.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
+  function field(id: keyof FormState, value: string) {
+    setForm((f) => ({ ...f, [id]: value }));
+  }
+
+  const segs  = result?.trip_segments ?? [];
+  const logs  = result?.log_sheets    ?? [];
+  const route = result?.route;
+
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,rgba(181,136,63,0.18),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(49,31,16,0.12),transparent_30%),linear-gradient(180deg,#f7efe3_0%,#efdfc8_45%,#e2ccb0_100%)] text-stone-900">
-      <section className="mx-auto flex min-h-screen max-w-7xl flex-col gap-8 px-4 py-6 sm:px-6 lg:px-8">
-        <header className="relative overflow-hidden rounded-[2.25rem] border border-stone-900/10 bg-[linear-gradient(135deg,rgba(255,251,245,0.96),rgba(247,238,224,0.88))] shadow-[0_28px_90px_rgba(67,52,34,0.12)] backdrop-blur">
-          <div className="absolute inset-0 hidden xl:block bg-[linear-gradient(90deg,transparent_0%,transparent_64%,rgba(36,24,14,0.96)_64%,rgba(12,9,7,0.98)_100%)]" />
-          <div className="absolute inset-y-0 left-[4.5rem] hidden w-px bg-stone-900/8 xl:block" />
-          <div className="relative grid gap-0 xl:grid-cols-[minmax(0,1.08fr)_24rem]">
-            <div className="grid gap-8 px-6 py-7 md:px-8 md:py-9 xl:pl-24 xl:pr-10">
-              <div className="space-y-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-amber-800/10 bg-amber-50/90 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.28em] text-amber-900">
-                <CompassIcon className="h-3.5 w-3.5" />
-                Dispatch workspace
-              </div>
-                <div className="space-y-4">
-                  <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">FMCSA Dispatch Flow</p>
-                  <h1 className="max-w-[11ch] text-[clamp(3rem,6vw,5.6rem)] font-semibold leading-[0.92] tracking-[-0.07em] text-stone-950">
-                    Plan the trip. Review the route. Trust the log.
-                  </h1>
-                  <p className="max-w-[42rem] text-base leading-8 text-stone-700 md:text-lg">
-                    A calmer workspace for entering trip details, checking stop behavior, and reviewing daily log output
-                    without drowning the driver workflow in too many panels at once.
-                  </p>
-                </div>
-              </div>
+    <main
+      style={{
+        minHeight: "100vh",
+        background: "var(--bg)",
+        color: "var(--text-primary)",
+        position: "relative",
+        zIndex: 1,
+      }}
+    >
+      {/* ── Top bar ─────────────────────────────────────────────────────────── */}
+      <header
+        style={{
+          borderBottom: "1px solid var(--border-mid)",
+          background: "rgba(13,18,24,0.9)",
+          backdropFilter: "blur(12px)",
+          position: "sticky",
+          top: 0,
+          zIndex: 50,
+          padding: "0 24px",
+          height: "52px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+          {/* Logo mark */}
+          <div
+            style={{
+              width: "28px",
+              height: "28px",
+              borderRadius: "6px",
+              background: "var(--amber)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+              <path d="M2 12 L8 4 L14 12" stroke="#0D1117" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M5 12 L11 12" stroke="#0D1117" strokeWidth="2" strokeLinecap="round"/>
+            </svg>
+          </div>
 
-              <div className="grid gap-3 md:grid-cols-3">
-                <HeroStat eyebrow="Inputs" value="4 key trip fields" />
-                <HeroStat eyebrow="Review" value="Map, stops, and sequence" />
-                <HeroStat eyebrow="Output" value="Driver log sheets that stay readable" />
-              </div>
+          <div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "16px",
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                textTransform: "uppercase",
+                color: "var(--text-primary)",
+                lineHeight: 1,
+              }}
+            >
+              HOS Trip Planner
             </div>
-
-            <div className="grid gap-4 px-6 py-7 text-stone-100 md:px-8 md:py-9">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-amber-200/80">Control room</p>
-                <h2 className="max-w-[14ch] text-2xl font-semibold leading-tight tracking-[-0.04em] text-white">
-                  Fewer distractions. Stronger trip decisions.
-                </h2>
-              </div>
-              <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-1">
-              <QuickNote
-                icon={<RouteIcon className="h-4 w-4" />}
-                title="Structured trip inputs"
-                text="Locations, cycle usage, and departure timing stay organized in one dispatcher-friendly form."
-              />
-              <QuickNote
-                icon={<MapIcon className="h-4 w-4" />}
-                title="Live route visibility"
-                text="The response workspace renders the route directly on a map with clearly marked stops."
-              />
-              <QuickNote
-                icon={<LogIcon className="h-4 w-4" />}
-                title="Operational review"
-                text="Sequence, stops, and logs can be reviewed one artifact at a time instead of all at once."
-              />
-              </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                color: "var(--text-muted)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                marginTop: "2px",
+              }}
+            >
+              FMCSA 49 CFR Part 395
             </div>
           </div>
-        </header>
+        </div>
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+        <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+          <StatusPill color="var(--amber)" label="70-hr / 8-day" />
+          <StatusPill color="#22C55E" label="Property Carrier" />
+        </div>
+      </header>
+
+      {/* ── Body ────────────────────────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "340px 1fr",
+          height: "calc(100vh - 52px)",
+          overflow: "hidden",
+        }}
+      >
+
+        {/* ══ LEFT — Form panel ══════════════════════════════════════════════ */}
+        <aside
+          style={{
+            borderRight: "1px solid var(--border-mid)",
+            background: "var(--surface-1)",
+            overflowY: "auto",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          {/* Panel header */}
+          <div
+            style={{
+              padding: "20px 20px 16px",
+              borderBottom: "1px solid var(--border)",
+            }}
+          >
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "9px",
+                color: "var(--amber)",
+                letterSpacing: "0.16em",
+                textTransform: "uppercase",
+                marginBottom: "4px",
+              }}
+            >
+              New Trip Request
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-display)",
+                fontSize: "22px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                textTransform: "uppercase",
+                color: "var(--text-primary)",
+                lineHeight: 1,
+              }}
+            >
+              Plan Your Route
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "11px",
+                color: "var(--text-muted)",
+                marginTop: "6px",
+                lineHeight: 1.5,
+              }}
+            >
+              Enter trip details to generate an HOS-compliant schedule and driver log sheets.
+            </div>
+          </div>
+
+          {/* Form */}
           <form
             onSubmit={handleSubmit}
-            className="grid self-start gap-6 rounded-[2rem] border border-stone-900/8 bg-[linear-gradient(180deg,rgba(255,252,246,0.94),rgba(249,242,230,0.9))] p-6 shadow-[0_22px_80px_rgba(67,52,34,0.1)] backdrop-blur md:p-7 xl:sticky xl:top-6"
+            style={{
+              padding: "16px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "20px",
+              flex: 1,
+            }}
           >
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">Trip request</p>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-950">Build a dispatch-ready trip</h2>
-              </div>
-              <div className="rounded-full bg-stone-950 px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-stone-50 shadow-[0_10px_26px_rgba(17,12,8,0.12)]">
-                HOS ready
-              </div>
-            </div>
-
-            <div className="grid gap-4">
-              <Field
+            {/* Location section */}
+            <FormSection label="Route Locations">
+              <FormField
                 id="current_location"
-                label="Current location"
+                label="Current Location"
+                placeholder="e.g. Chicago, IL"
                 value={form.current_location}
-                onChange={(value) => setForm((current) => ({ ...current, current_location: value }))}
+                onChange={(v) => field("current_location", v)}
+                hint="Your starting position"
+                icon={
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
+                    <circle cx="6" cy="6" r="2.5"/>
+                    <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1"/>
+                  </svg>
+                }
+                iconColor="var(--amber)"
               />
-              <Field
+              <FormField
                 id="pickup_location"
-                label="Pickup location"
+                label="Pickup Location"
+                placeholder="e.g. Indianapolis, IN"
                 value={form.pickup_location}
-                onChange={(value) => setForm((current) => ({ ...current, pickup_location: value }))}
+                onChange={(v) => field("pickup_location", v)}
+                hint="Where you collect the load"
+                icon={
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M6 1 L6 11 M3 8 L6 11 L9 8" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                }
+                iconColor="#22C55E"
               />
-              <Field
+              <FormField
                 id="dropoff_location"
-                label="Dropoff location"
+                label="Dropoff Location"
+                placeholder="e.g. Nashville, TN"
                 value={form.dropoff_location}
-                onChange={(value) => setForm((current) => ({ ...current, dropoff_location: value }))}
+                onChange={(v) => field("dropoff_location", v)}
+                hint="Final delivery point"
+                icon={
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
+                    <path d="M6 1 L9 4.5 L6 4.5 L6 8 M3 8 L6 11 L9 8" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                }
+                iconColor="#EF4444"
               />
-            </div>
+            </FormSection>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <Field
+            {/* Schedule section */}
+            <FormSection label="Schedule & Cycle">
+              <FormField
                 id="cycle_used_hours"
-                label="Cycle hours used"
+                label="Cycle Hours Used"
+                placeholder="0"
+                value={form.cycle_used_hours}
+                onChange={(v) => field("cycle_used_hours", v)}
                 type="number"
                 min="0"
-                max="70"
-                step="0.1"
-                value={form.cycle_used_hours}
-                onChange={(value) => setForm((current) => ({ ...current, cycle_used_hours: value }))}
+                max="69.9"
+                step="0.5"
+                hint="Hours used in current 70-hr / 8-day cycle"
+                icon={
+                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2">
+                    <circle cx="6" cy="6" r="4.5"/>
+                    <path d="M6 3.5 L6 6 L8 7.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                }
+                iconColor="var(--cyan)"
               />
-              <Field
-                id="departure_date"
-                label="Departure date"
-                type="date"
-                value={form.departure_date}
-                onChange={(value) => setForm((current) => ({ ...current, departure_date: value }))}
-              />
-              <Field
-                id="departure_time"
-                label="Departure time"
-                type="time"
-                value={form.departure_time}
-                onChange={(value) => setForm((current) => ({ ...current, departure_time: value }))}
-              />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                <FormField
+                  id="departure_date"
+                  label="Departure Date"
+                  value={form.departure_date}
+                  onChange={(v) => field("departure_date", v)}
+                  type="date"
+                />
+                <FormField
+                  id="departure_time"
+                  label="Departure Time"
+                  value={form.departure_time}
+                  onChange={(v) => field("departure_time", v)}
+                  type="time"
+                />
+              </div>
+            </FormSection>
+
+            {/* HOS rules reminder */}
+            <div
+              style={{
+                background: "var(--amber-dim)",
+                border: "1px solid var(--border-amber)",
+                borderRadius: "6px",
+                padding: "10px 12px",
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                gap: "6px",
+              }}
+            >
+              {[
+                ["11-hr drive limit", "per shift"],
+                ["14-hr duty window", "per shift"],
+                ["30-min break", "after 8 hrs"],
+                ["10-hr reset", "off-duty"],
+                ["Fuel stop", "every 1,000 mi"],
+                ["1-hr pickup/dropoff", "each end"],
+              ].map(([rule, detail]) => (
+                <div key={rule} style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+                  <div
+                    style={{
+                      width: "4px",
+                      height: "4px",
+                      borderRadius: "1px",
+                      background: "var(--amber)",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--amber)", letterSpacing: "0.04em" }}>
+                      {rule}
+                    </span>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px" }}>
+                      {detail}
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
 
-            <div className="grid gap-3 rounded-[1.5rem] border border-stone-900/8 bg-white/70 px-4 py-4 text-sm text-stone-600 sm:grid-cols-3">
-              <HelperPill icon={<ShieldIcon className="h-4 w-4" />} text="70-hour cycle constrained" />
-              <HelperPill icon={<ClockIcon className="h-4 w-4" />} text="Immediate scheduling preview" />
-              <HelperPill icon={<MapIcon className="h-4 w-4" />} text="Map-ready route output" />
-            </div>
-
-            <div className="flex flex-col gap-3 border-t border-stone-200 pt-5 sm:flex-row sm:items-center sm:justify-between">
-              <p className="max-w-md text-sm leading-6 text-stone-600">
-                Use concise city and state inputs for more reliable geocoding and faster route generation.
-              </p>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-stone-950 px-6 py-3 text-sm font-semibold text-stone-50 shadow-[0_12px_30px_rgba(36,27,18,0.18)] transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500"
+            {/* Error */}
+            {error && (
+              <div
+                style={{
+                  background: "rgba(239,68,68,0.08)",
+                  border: "1px solid rgba(239,68,68,0.25)",
+                  borderRadius: "6px",
+                  padding: "10px 12px",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "11px",
+                  color: "#FCA5A5",
+                  lineHeight: 1.5,
+                }}
               >
-                {isLoading ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <ArrowIcon className="h-4 w-4" />}
-                {isLoading ? "Planning trip" : "Plan trip"}
-              </button>
-            </div>
-
-            {errorMessage ? (
-              <div className="rounded-[1.5rem] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                {errorMessage}
-              </div>
-            ) : null}
-          </form>
-
-          <section className="grid self-start gap-5 rounded-[2rem] border border-stone-900/8 bg-[linear-gradient(180deg,#231810_0%,#2f2118_100%)] p-6 text-stone-100 shadow-[0_28px_90px_rgba(55,40,24,0.22)] md:p-7">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">Trip summary</p>
-                <h2 className="text-2xl font-semibold tracking-[-0.04em] text-stone-50">
-                  Route and compliance workspace
-                </h2>
-              </div>
-              <div className="rounded-full border border-stone-700 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-stone-300">
-                {result ? describeTripWindow(result.trip_segments) : "Awaiting request"}
-              </div>
-            </div>
-
-            {result ? (
-              <>
-                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                  <StatCard
-                    icon={<RouteIcon className="h-5 w-5" />}
-                    label="Distance"
-                    value={`${result.route.total_distance_miles.toFixed(2)} mi`}
-                  />
-                  <StatCard
-                    icon={<ClockIcon className="h-5 w-5" />}
-                    label="Drive time"
-                    value={`${result.route.total_duration_hours.toFixed(2)} hr`}
-                  />
-                  <StatCard
-                    icon={<LayerIcon className="h-5 w-5" />}
-                    label="Trip segments"
-                    value={`${result.trip_segments.length}`}
-                  />
-                  <StatCard
-                    icon={<LogIcon className="h-5 w-5" />}
-                    label="Log sheets"
-                    value={`${result.log_sheets.length}`}
-                  />
-                  <StatCard
-                    icon={<PauseIcon className="h-5 w-5" />}
-                    label="Break stops"
-                    value={`${countStops(result.trip_segments, "30-min break")}`}
-                  />
-                  <StatCard
-                    icon={<FuelIcon className="h-5 w-5" />}
-                    label="Fuel stops"
-                    value={`${countStops(result.trip_segments, "Fuel stop")}`}
-                  />
-                </div>
-
-                <div className="grid gap-4 rounded-[1.7rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 sm:p-5">
-                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div className="space-y-1">
-                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">Result workspace</p>
-                      <h3 className="text-lg font-semibold text-stone-50">Review one trip artifact at a time</h3>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      <ResultTab
-                        active={activeView === "map"}
-                        icon={<MapIcon className="h-4 w-4" />}
-                        label="Map"
-                        onClick={() => setActiveView("map")}
-                      />
-                      <ResultTab
-                        active={activeView === "sequence"}
-                        icon={<SequenceIcon className="h-4 w-4" />}
-                        label="Sequence"
-                        onClick={() => setActiveView("sequence")}
-                      />
-                      <ResultTab
-                        active={activeView === "stops"}
-                        icon={<PinIcon className="h-4 w-4" />}
-                        label="Stops"
-                        onClick={() => setActiveView("stops")}
-                      />
-                      <ResultTab
-                        active={activeView === "logs"}
-                        icon={<GridIcon className="h-4 w-4" />}
-                        label={`Logs (${result.log_sheets.length})`}
-                        onClick={() => setActiveView("logs")}
-                      />
-                    </div>
-                  </div>
-
-                  {activeView === "map" ? (
-                    <div className="grid gap-4">
-                      <SectionHeading
-                        icon={<MapIcon className="h-4 w-4 text-amber-300" />}
-                        title="Route map"
-                        subtitle="Follow the full geometry and inspect the key trip stops."
-                      />
-                      <TripRouteMap
-                        polylineEncoded={result.route.polyline_encoded}
-                        waypoints={result.route.waypoints}
-                      />
-                    </div>
-                  ) : null}
-
-                  {activeView === "sequence" ? (
-                    <div className="grid gap-4">
-                      <SectionHeading
-                        icon={<SequenceIcon className="h-4 w-4 text-amber-300" />}
-                        title="Operational sequence"
-                        subtitle="Review the duty-status flow in the order it unfolds."
-                      />
-                      <ol className="grid gap-3">
-                        {result.trip_segments.map((segment, index) => (
-                          <li
-                            key={`${segment.start}-${segment.label}`}
-                            className="grid gap-2 rounded-[1.25rem] border border-white/6 bg-black/10 px-4 py-3"
-                          >
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex min-w-0 items-start gap-3">
-                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-300/14 text-xs font-semibold text-amber-200">
-                                  {index + 1}
-                                </span>
-                                <div className="min-w-0">
-                                  <p className="text-sm font-semibold text-stone-50">{segment.label}</p>
-                                  <p className="break-all text-xs uppercase tracking-[0.2em] text-stone-500">{segment.type}</p>
-                                </div>
-                              </div>
-                              <p className="shrink-0 text-right text-xs text-stone-400">{formatSegmentTime(segment.start)}</p>
-                            </div>
-                            <div className="flex flex-col gap-1 text-sm text-stone-300 sm:flex-row sm:items-center sm:justify-between">
-                              <span>{segment.location || "In transit"}</span>
-                              <span>{segment.distance_miles.toFixed(2)} mi</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ol>
-                    </div>
-                  ) : null}
-
-                  {activeView === "stops" ? (
-                    <div className="grid gap-4">
-                      <SectionHeading
-                        icon={<PinIcon className="h-4 w-4 text-amber-300" />}
-                        title="Route stops"
-                        subtitle="Check the key stop markers and coordinates without the map crowding the view."
-                      />
-                      <div className="grid gap-3">
-                        {result.route.waypoints.map((waypoint) => (
-                          <div
-                            key={`${waypoint.type}-${waypoint.label}`}
-                            className="flex flex-col gap-2 rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
-                          >
-                            <div className="min-w-0">
-                              <p className="text-sm font-semibold text-stone-50">{waypoint.label}</p>
-                              <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{waypoint.type}</p>
-                            </div>
-                            <p className="text-xs text-stone-400">
-                              {waypoint.lat.toFixed(3)}, {waypoint.lng.toFixed(3)}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-
-                {activeView === "logs" ? (
-                  <div className="grid gap-4 rounded-[1.7rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4 sm:p-5">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <SectionHeading
-                        icon={<GridIcon className="h-4 w-4 text-amber-300" />}
-                        title="Driver daily logs"
-                        subtitle="Review each sheet in a dedicated, fuller-width canvas."
-                      />
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">
-                        {result.log_sheets.length} sheet{result.log_sheets.length === 1 ? "" : "s"}
-                      </p>
-                    </div>
-                    <LogSheetRenderer logSheets={result.log_sheets} />
-                  </div>
-                ) : null}
-              </>
-            ) : (
-              <div className="grid flex-1 gap-5 rounded-[1.7rem] border border-dashed border-white/10 bg-white/[0.03] p-8 text-center">
-                <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-amber-300/10 text-amber-200">
-                  <CompassIcon className="h-6 w-6" />
-                </div>
-                <div className="space-y-2">
-                  <p className="text-lg font-semibold text-stone-50">Results appear here after submission</p>
-                  <p className="mx-auto max-w-md text-sm leading-7 text-stone-400">
-                    Map output, stop flow, and daily log review will load into this workspace once the planner response
-                    is available.
-                  </p>
-                </div>
+                {error}
               </div>
             )}
-          </section>
+
+            {/* Submit */}
+            <button
+              type="submit"
+              disabled={loading || !isValid}
+              style={{
+                background: loading || !isValid ? "var(--surface-3)" : "var(--amber)",
+                color: loading || !isValid ? "var(--text-muted)" : "#0D1117",
+                border: "none",
+                borderRadius: "6px",
+                padding: "12px 20px",
+                fontFamily: "var(--font-display)",
+                fontSize: "14px",
+                fontWeight: 700,
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+                cursor: loading || !isValid ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                transition: "background 160ms ease, transform 100ms ease",
+                marginTop: "auto",
+              }}
+              onMouseDown={(e) => { if (!loading && isValid) (e.currentTarget.style.transform = "scale(0.98)"); }}
+              onMouseUp={(e) => { (e.currentTarget.style.transform = "scale(1)"); }}
+            >
+              {loading ? (
+                <>
+                  <Spinner size={14} />
+                  Calculating Route…
+                </>
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M2 8 L14 8 M9 3 L14 8 L9 13"/>
+                  </svg>
+                  Plan Trip
+                </>
+              )}
+            </button>
+          </form>
+        </aside>
+
+        {/* ══ RIGHT — Results panel ══════════════════════════════════════════ */}
+        <section
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+            background: "var(--bg)",
+          }}
+        >
+          {!result ? (
+            /* ── Empty state ── */
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "16px",
+                padding: "40px",
+                textAlign: "center",
+              }}
+            >
+              <div
+                style={{
+                  width: "60px",
+                  height: "60px",
+                  borderRadius: "12px",
+                  background: "var(--surface-2)",
+                  border: "1px solid var(--border-mid)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="14" cy="14" r="11"/>
+                  <path d="M14 9 L14 14 L18 16"/>
+                  <path d="M7 20 L4 23"/>
+                  <path d="M21 20 L24 23"/>
+                </svg>
+              </div>
+              <div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    fontSize: "20px",
+                    fontWeight: 600,
+                    letterSpacing: "0.04em",
+                    textTransform: "uppercase",
+                    color: "var(--text-primary)",
+                    marginBottom: "6px",
+                  }}
+                >
+                  Ready for Dispatch
+                </div>
+                <div
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    fontSize: "12px",
+                    color: "var(--text-muted)",
+                    maxWidth: "340px",
+                    lineHeight: 1.6,
+                  }}
+                >
+                  Enter your route on the left and click Plan Trip to generate an HOS-compliant schedule, route map, and FMCSA driver log sheets.
+                </div>
+              </div>
+
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "10px",
+                  maxWidth: "420px",
+                  width: "100%",
+                  marginTop: "8px",
+                }}
+              >
+                {[
+                  { icon: "🗺️", label: "Route map with stops" },
+                  { icon: "📋", label: "FMCSA log sheets" },
+                  { icon: "⏱️", label: "HOS-compliant schedule" },
+                ].map(({ icon, label }) => (
+                  <div
+                    key={label}
+                    style={{
+                      background: "var(--surface-2)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      padding: "12px",
+                      textAlign: "center",
+                    }}
+                  >
+                    <div style={{ fontSize: "20px", marginBottom: "6px" }}>{icon}</div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "10px",
+                        color: "var(--text-muted)",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      {label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <>
+              {/* ── Stats strip ── */}
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(6, 1fr)",
+                  borderBottom: "1px solid var(--border-mid)",
+                  background: "var(--surface-1)",
+                  flexShrink: 0,
+                }}
+              >
+                {[
+                  { label: "Distance",     value: `${route!.total_distance_miles.toFixed(1)} mi` },
+                  { label: "Drive Time",   value: `${route!.total_duration_hours.toFixed(1)} hr` },
+                  { label: "Trip Window",  value: totalTripWindow(segs) },
+                  { label: "Segments",     value: `${segs.length}` },
+                  { label: "Break Stops",  value: `${countByLabel(segs, "30-min break")}` },
+                  { label: "Fuel Stops",   value: `${countByLabel(segs, "Fuel stop")}` },
+                ].map(({ label, value }) => (
+                  <div
+                    key={label}
+                    style={{
+                      padding: "10px 14px",
+                      borderRight: "1px solid var(--border)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "8px",
+                        color: "var(--text-muted)",
+                        letterSpacing: "0.12em",
+                        textTransform: "uppercase",
+                        marginBottom: "3px",
+                      }}
+                    >
+                      {label}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "15px",
+                        fontWeight: 500,
+                        color: "var(--text-primary)",
+                        letterSpacing: "0.02em",
+                      }}
+                    >
+                      {value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Tab bar ── */}
+              <div
+                style={{
+                  display: "flex",
+                  borderBottom: "1px solid var(--border-mid)",
+                  background: "var(--surface-1)",
+                  flexShrink: 0,
+                  overflowX: "auto",
+                }}
+              >
+                {(
+                  [
+                    { id: "map",      label: "Route Map",       count: null },
+                    { id: "sequence", label: "Sequence",         count: segs.length },
+                    { id: "stops",    label: "Stops",            count: route!.waypoints.length },
+                    { id: "logs",     label: "Daily Logs",       count: logs.length },
+                  ] as { id: ResultTab; label: string; count: number | null }[]
+                ).map(({ id, label, count }) => (
+                  <button
+                    key={id}
+                    onClick={() => setActiveTab(id)}
+                    style={{
+                      fontFamily: "var(--font-display)",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      letterSpacing: "0.1em",
+                      textTransform: "uppercase",
+                      padding: "11px 18px",
+                      background: "transparent",
+                      border: "none",
+                      borderBottom: activeTab === id ? "2px solid var(--amber)" : "2px solid transparent",
+                      color: activeTab === id ? "var(--amber)" : "var(--text-muted)",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      whiteSpace: "nowrap",
+                      transition: "color 160ms ease",
+                    }}
+                  >
+                    {label}
+                    {count !== null && (
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "10px",
+                          background: activeTab === id ? "var(--amber-dim)" : "var(--surface-3)",
+                          color: activeTab === id ? "var(--amber)" : "var(--text-muted)",
+                          borderRadius: "3px",
+                          padding: "1px 5px",
+                          border: `1px solid ${activeTab === id ? "var(--border-amber)" : "var(--border)"}`,
+                        }}
+                      >
+                        {count}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── Tab content ── */}
+              <div style={{ flex: 1, overflow: "auto" }}>
+
+                {/* MAP */}
+                {activeTab === "map" && (
+                  <div style={{ height: "100%", minHeight: "400px", position: "relative" }}>
+                    <TripRouteMap
+                      polylineEncoded={route!.polyline_encoded}
+                      waypoints={route!.waypoints}
+                    />
+                    {/* Waypoint legend */}
+                    <div
+                      style={{
+                        position: "absolute",
+                        bottom: "16px",
+                        left: "16px",
+                        background: "rgba(13,18,24,0.92)",
+                        backdropFilter: "blur(8px)",
+                        border: "1px solid var(--border-mid)",
+                        borderRadius: "8px",
+                        padding: "10px 12px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "5px",
+                        zIndex: 500,
+                      }}
+                    >
+                      {Object.entries(WAYPOINT_COLORS).map(([type, color]) => (
+                        <div key={type} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-secondary)", textTransform: "capitalize" }}>
+                            {type}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* SEQUENCE */}
+                {activeTab === "sequence" && (
+                  <div style={{ padding: "20px 24px" }}>
+                    <SectionHeader
+                      label="Operational Sequence"
+                      desc="Duty-status flow from departure to delivery"
+                    />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "2px", marginTop: "12px" }}>
+                      {segs.map((seg, i) => {
+                        const cfg = STATUS_CONFIG[seg.type] ?? { color: "#374B6E", label: seg.type };
+                        const dur = ((new Date(seg.end).getTime() - new Date(seg.start).getTime()) / 3600000).toFixed(2);
+                        return (
+                          <div
+                            key={i}
+                            className="animate-fade-slide-up"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "28px 4px 1fr auto",
+                              gap: "10px",
+                              alignItems: "start",
+                              padding: "8px 0",
+                              animationDelay: `${i * 20}ms`,
+                            }}
+                          >
+                            {/* Index */}
+                            <div
+                              style={{
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "10px",
+                                color: "var(--text-dim)",
+                                paddingTop: "2px",
+                                textAlign: "right",
+                              }}
+                            >
+                              {String(i + 1).padStart(2, "0")}
+                            </div>
+
+                            {/* Color bar */}
+                            <div
+                              style={{
+                                borderRadius: "2px",
+                                background: cfg.color,
+                                alignSelf: "stretch",
+                                minHeight: "32px",
+                              }}
+                            />
+
+                            {/* Content */}
+                            <div>
+                              <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                                <span
+                                  style={{
+                                    fontFamily: "var(--font-display)",
+                                    fontSize: "13px",
+                                    fontWeight: 600,
+                                    letterSpacing: "0.04em",
+                                    textTransform: "uppercase",
+                                    color: "var(--text-primary)",
+                                  }}
+                                >
+                                  {seg.label}
+                                </span>
+                                <span
+                                  style={{
+                                    fontFamily: "var(--font-mono)",
+                                    fontSize: "9px",
+                                    color: cfg.color,
+                                    background: `${cfg.color}18`,
+                                    border: `1px solid ${cfg.color}35`,
+                                    borderRadius: "3px",
+                                    padding: "1px 5px",
+                                    letterSpacing: "0.08em",
+                                    textTransform: "uppercase",
+                                  }}
+                                >
+                                  {cfg.label}
+                                </span>
+                              </div>
+                              <div style={{ display: "flex", gap: "14px" }}>
+                                <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                                  {fmtSegTime(seg.start)}
+                                </span>
+                                {seg.location && (
+                                  <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-secondary)" }}>
+                                    📍 {seg.location}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Duration */}
+                            <div style={{ textAlign: "right", paddingTop: "2px" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "13px", color: "var(--text-primary)", letterSpacing: "0.02em" }}>
+                                {dur}
+                              </div>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)" }}>
+                                {seg.distance_miles > 0 ? `${seg.distance_miles.toFixed(1)} mi` : "hr"}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* STOPS */}
+                {activeTab === "stops" && (
+                  <div style={{ padding: "20px 24px" }}>
+                    <SectionHeader label="Route Stops" desc="Key waypoints along the planned route" />
+                    <div style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "12px" }}>
+                      {route!.waypoints.map((wp, i) => {
+                        const color = WAYPOINT_COLORS[wp.type] ?? "#6B7A9B";
+                        return (
+                          <div
+                            key={i}
+                            className="animate-fade-slide-up"
+                            style={{
+                              display: "grid",
+                              gridTemplateColumns: "32px 1fr auto",
+                              gap: "12px",
+                              alignItems: "center",
+                              padding: "12px 14px",
+                              background: "var(--surface-2)",
+                              border: "1px solid var(--border)",
+                              borderLeft: `3px solid ${color}`,
+                              borderRadius: "6px",
+                              animationDelay: `${i * 40}ms`,
+                            }}
+                          >
+                            <div
+                              style={{
+                                width: "28px",
+                                height: "28px",
+                                borderRadius: "50%",
+                                background: `${color}20`,
+                                border: `1px solid ${color}50`,
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontFamily: "var(--font-mono)",
+                                fontSize: "11px",
+                                color,
+                                fontWeight: 500,
+                              }}
+                            >
+                              {i + 1}
+                            </div>
+                            <div>
+                              <div
+                                style={{
+                                  fontFamily: "var(--font-display)",
+                                  fontSize: "14px",
+                                  fontWeight: 600,
+                                  letterSpacing: "0.04em",
+                                  textTransform: "uppercase",
+                                  color: "var(--text-primary)",
+                                  marginBottom: "3px",
+                                }}
+                              >
+                                {wp.label}
+                              </div>
+                              <div
+                                style={{
+                                  fontFamily: "var(--font-mono)",
+                                  fontSize: "10px",
+                                  color,
+                                  letterSpacing: "0.1em",
+                                  textTransform: "uppercase",
+                                }}
+                              >
+                                {wp.type}
+                              </div>
+                            </div>
+                            <div style={{ textAlign: "right" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                                {wp.lat.toFixed(4)}°N
+                              </div>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                                {Math.abs(wp.lng).toFixed(4)}°W
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* LOGS */}
+                {activeTab === "logs" && (
+                  <div style={{ padding: "20px 24px" }}>
+                    <SectionHeader
+                      label={`Driver Daily Logs — ${logs.length} sheet${logs.length === 1 ? "" : "s"}`}
+                      desc="FMCSA-compliant 24-hour log sheets for each day of the trip"
+                    />
+
+                    {/* Legend */}
+                    <div
+                      style={{
+                        display: "flex",
+                        gap: "12px",
+                        flexWrap: "wrap",
+                        marginTop: "12px",
+                        marginBottom: "16px",
+                      }}
+                    >
+                      {[
+                        { status: "OFF_DUTY",            color: "#374B6E", label: "Off Duty" },
+                        { status: "SLEEPER_BERTH",       color: "#5B21B6", label: "Sleeper Berth" },
+                        { status: "DRIVING",             color: "#D97706", label: "Driving" },
+                        { status: "ON_DUTY_NOT_DRIVING", color: "#0E7490", label: "On Duty (Not Driving)" },
+                      ].map(({ color, label }) => (
+                        <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                          <div style={{ width: "12px", height: "12px", borderRadius: "2px", background: color }} />
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-secondary)", letterSpacing: "0.06em" }}>
+                            {label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <LogSheetRenderer logSheets={logs} />
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </section>
-      </section>
+      </div>
     </main>
   );
 }
 
-function Field({
-  id,
-  label,
-  value,
-  onChange,
-  type = "text",
-  min,
-  max,
-  step,
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function FormSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      <div
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "9px",
+          color: "var(--text-muted)",
+          letterSpacing: "0.16em",
+          textTransform: "uppercase",
+          paddingBottom: "6px",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        {label}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function FormField({
+  id, label, placeholder = "", value, onChange, type = "text",
+  min, max, step, hint, icon, iconColor,
 }: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  type?: string;
-  min?: string;
-  max?: string;
-  step?: string;
+  id: string; label: string; placeholder?: string; value: string;
+  onChange: (v: string) => void; type?: string;
+  min?: string; max?: string; step?: string;
+  hint?: string; icon?: React.ReactNode; iconColor?: string;
 }) {
   return (
-    <div className="grid gap-2">
-      <label className="text-sm font-medium text-stone-700" htmlFor={id}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+      <label
+        htmlFor={id}
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "10px",
+          color: "var(--text-secondary)",
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+          display: "flex",
+          alignItems: "center",
+          gap: "5px",
+        }}
+      >
+        {icon && (
+          <span style={{ color: iconColor, display: "flex", alignItems: "center" }}>
+            {icon}
+          </span>
+        )}
         {label}
       </label>
       <input
@@ -509,231 +1073,103 @@ function Field({
         min={min}
         max={max}
         step={step}
-        className="rounded-[1.25rem] border border-stone-300 bg-white px-4 py-3 text-sm text-stone-900 outline-none transition focus:border-stone-950 focus:ring-4 focus:ring-amber-200/60"
+        placeholder={placeholder}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
+        onChange={(e) => onChange(e.target.value)}
         required
       />
+      {hint && (
+        <div
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "9px",
+            color: "var(--text-dim)",
+            letterSpacing: "0.06em",
+          }}
+        >
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
 
-function QuickNote({ icon, title, text }: { icon: React.ReactNode; title: string; text: string }) {
+function StatusPill({ color, label }: { color: string; label: string }) {
   return (
-    <div className="rounded-[1.5rem] border border-white/8 bg-[linear-gradient(180deg,rgba(255,255,255,0.04),rgba(255,255,255,0.02))] px-4 py-4 text-stone-100 shadow-[0_18px_45px_rgba(15,10,7,0.12)]">
-      <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-full bg-amber-300/12 text-amber-200">
-        {icon}
-      </div>
-      <p className="text-sm font-semibold text-stone-50">{title}</p>
-      <p className="mt-2 text-sm leading-6 text-stone-300">{text}</p>
-    </div>
-  );
-}
-
-function ResultTab({
-  active,
-  icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: React.ReactNode;
-  label: string;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
-        active
-          ? "bg-amber-300 text-stone-950 shadow-[0_10px_24px_rgba(245,165,36,0.16)]"
-          : "bg-white/[0.04] text-stone-300 hover:bg-white/[0.08] hover:text-stone-100"
-      }`}
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "5px",
+        background: `${color}12`,
+        border: `1px solid ${color}30`,
+        borderRadius: "4px",
+        padding: "3px 8px",
+      }}
     >
-      {icon}
-      <span>{label}</span>
-    </button>
+      <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: color }} />
+      <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
+        {label}
+      </span>
+    </div>
   );
 }
 
-function SectionHeading({
-  icon,
-  title,
-  subtitle,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  subtitle: string;
-}) {
+function SectionHeader({ label, desc }: { label: string; desc: string }) {
   return (
-    <div className="space-y-1">
-      <div className="flex items-center gap-2">
-        {icon}
-        <p className="text-sm font-semibold text-stone-100">{title}</p>
+    <div style={{ marginBottom: "4px" }}>
+      <div
+        style={{
+          fontFamily: "var(--font-display)",
+          fontSize: "16px",
+          fontWeight: 700,
+          letterSpacing: "0.06em",
+          textTransform: "uppercase",
+          color: "var(--text-primary)",
+          marginBottom: "3px",
+        }}
+      >
+        {label}
       </div>
-      <p className="text-sm leading-6 text-stone-400">{subtitle}</p>
-    </div>
-  );
-}
-
-function HelperPill({ icon, text }: { icon: React.ReactNode; text: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-full bg-white/90 px-3 py-2 text-sm text-stone-700 shadow-[inset_0_0_0_1px_rgba(91,74,52,0.08)]">
-      <span className="text-stone-900">{icon}</span>
-      <span>{text}</span>
-    </div>
-  );
-}
-
-function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
-  return (
-    <div className="rounded-[1.4rem] border border-white/7 bg-[linear-gradient(180deg,rgba(255,255,255,0.05),rgba(255,255,255,0.025))] p-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-xs font-semibold uppercase tracking-[0.24em] text-stone-500">{label}</p>
-        <span className="text-amber-200">{icon}</span>
+      <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+        {desc}
       </div>
-      <p className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-stone-50">{value}</p>
     </div>
   );
 }
 
-function HeroStat({ eyebrow, value }: { eyebrow: string; value: string }) {
+function MapPlaceholder({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-[1.35rem] border border-stone-900/8 bg-white/66 px-4 py-4 shadow-[0_12px_28px_rgba(67,52,34,0.06)]">
-      <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-stone-500">{eyebrow}</p>
-      <p className="mt-2 text-sm font-medium leading-6 text-stone-800">{value}</p>
+    <div
+      style={{
+        height: "100%",
+        minHeight: "400px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: "8px",
+        background: "var(--surface-1)",
+      }}
+    >
+      {children}
     </div>
   );
 }
 
-function CompassIcon({ className }: { className?: string }) {
+function Spinner({ size = 16 }: { size?: number }) {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M14.8 9.2 13 13l-3.8 1.8L11 11l3.8-1.8Z" />
-    </svg>
-  );
-}
-
-function RouteIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <circle cx="6" cy="6" r="2.5" />
-      <circle cx="18" cy="18" r="2.5" />
-      <path d="M8.5 6h3a4 4 0 0 1 4 4v4" />
-      <path d="M12 14h4" />
-    </svg>
-  );
-}
-
-function ClockIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4l2.8 2" />
-    </svg>
-  );
-}
-
-function LogIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M7 4h8l3 3v13H7z" />
-      <path d="M15 4v4h4" />
-      <path d="M10 12h5M10 16h5" />
-    </svg>
-  );
-}
-
-function ShieldIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M12 3 6.5 5v5.2c0 3.7 2.2 7 5.5 8.8 3.3-1.8 5.5-5.1 5.5-8.8V5z" />
-      <path d="m9.5 11.8 1.7 1.7 3.3-3.7" />
-    </svg>
-  );
-}
-
-function ArrowIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M5 12h14" />
-      <path d="m13 6 6 6-6 6" />
-    </svg>
-  );
-}
-
-function LayerIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="m12 4 8 4-8 4-8-4 8-4Z" />
-      <path d="m4 12 8 4 8-4" />
-      <path d="m4 16 8 4 8-4" />
-    </svg>
-  );
-}
-
-function PauseIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M10 9v6M14 9v6" />
-    </svg>
-  );
-}
-
-function FuelIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M6 6a2 2 0 0 1 2-2h5v16H8a2 2 0 0 1-2-2z" />
-      <path d="M13 8h2.5a1.5 1.5 0 0 1 1.5 1.5V18a2 2 0 1 0 4 0v-6l-2-2" />
-    </svg>
-  );
-}
-
-function MapIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="m3 6 6-2 6 2 6-2v14l-6 2-6-2-6 2z" />
-      <path d="M9 4v14M15 6v14" />
-    </svg>
-  );
-}
-
-function SequenceIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M5 7h7" />
-      <path d="m9 3 3 4-3 4" />
-      <path d="M19 17h-7" />
-      <path d="m15 13-3 4 3 4" />
-    </svg>
-  );
-}
-
-function PinIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M12 20s6-5.4 6-10a6 6 0 1 0-12 0c0 4.6 6 10 6 10Z" />
-      <circle cx="12" cy="10" r="2.5" />
-    </svg>
-  );
-}
-
-function GridIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M4 4h16v16H4z" />
-      <path d="M4 10h16M10 4v16M16 4v16" />
-    </svg>
-  );
-}
-
-function SpinnerIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className={className}>
-      <path d="M12 4a8 8 0 1 1-5.7 2.3" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      className="animate-spin"
+    >
+      <path d="M8 1.5 A6.5 6.5 0 0 1 14.5 8"/>
     </svg>
   );
 }
