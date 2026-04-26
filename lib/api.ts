@@ -4,6 +4,21 @@ export type PlanTripRequest = {
   dropoff_location: string;
   cycle_used_hours: number;
   departure_datetime: string;
+  driver_name?: string;
+  carrier_name?: string;
+  truck_number?: string;
+  trailer_number?: string;
+  co_driver?: string;
+  shipping_doc?: string;
+};
+
+export type LogDetails = {
+  driver_name: string;
+  carrier_name: string;
+  truck_number: string;
+  trailer_number: string;
+  co_driver: string;
+  shipping_doc: string;
 };
 
 export type RouteWaypoint = {
@@ -46,6 +61,7 @@ export type LogSheet = {
 };
 
 export type PlanTripResponse = {
+  log_details: LogDetails;
   route: {
     legs: Array<{
       from: string;

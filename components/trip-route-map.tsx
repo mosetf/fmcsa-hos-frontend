@@ -19,7 +19,7 @@ export function TripRouteMap({ polylineEncoded, waypoints }: TripRouteMapProps) 
 
   if (polyline.length === 0) {
     return (
-      <div className="flex min-h-[20rem] items-center justify-center rounded-[1.5rem] border border-dashed border-white/10 bg-black/10 px-6 py-10 text-sm text-stone-400">
+      <div className="flex min-h-[20rem] items-center justify-center rounded-md border border-dashed border-slate-300 bg-white px-6 py-10 text-sm text-slate-500">
         Route geometry is unavailable for this trip.
       </div>
     );
@@ -28,7 +28,7 @@ export function TripRouteMap({ polylineEncoded, waypoints }: TripRouteMapProps) 
   const center = polyline[0];
 
   return (
-    <div className="overflow-hidden rounded-[1.7rem] border border-white/8 bg-[#18110c]">
+    <div className="overflow-hidden border-y border-slate-200 bg-white">
       <MapContainer
         center={center}
         zoom={6}
@@ -39,7 +39,7 @@ export function TripRouteMap({ polylineEncoded, waypoints }: TripRouteMapProps) 
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
-        <Polyline positions={polyline as LatLngExpression[]} pathOptions={{ color: "#f5a524", weight: 5, opacity: 0.9 }} />
+        <Polyline positions={polyline as LatLngExpression[]} pathOptions={{ color: "#047857", weight: 5, opacity: 0.9 }} />
         {waypoints.map((waypoint) => (
           <CircleMarker
             key={`${waypoint.type}-${waypoint.label}`}
@@ -97,6 +97,8 @@ function FitBounds({
 
 const markerColorByType: Record<string, string> = {
   current: "#d97706",
-  pickup: "#0f766e",
-  dropoff: "#7c3aed",
+  pickup: "#047857",
+  dropoff: "#dc2626",
+  fuel: "#ea580c",
+  rest: "#2563eb",
 };

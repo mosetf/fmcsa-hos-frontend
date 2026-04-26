@@ -1,51 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Open+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700;800&display=swap');
 @import "tailwindcss";
 
 :root {
   /* Core surfaces */
-  --bg:        #07090E;
-  --surface-1: #0D1218;
-  --surface-2: #111822;
-  --surface-3: #162030;
-  --surface-4: #1C2940;
+  --bg:        #E8EEF5;
+  --surface-1: #FFFFFF;
+  --surface-2: #F7FAFC;
+  --surface-3: #E7EDF4;
+  --surface-4: #CBD5E1;
 
   /* Borders */
-  --border:        rgba(255, 255, 255, 0.06);
-  --border-mid:    rgba(255, 255, 255, 0.10);
-  --border-hi:     rgba(255, 255, 255, 0.16);
-  --border-amber:  rgba(245, 166, 35, 0.35);
-  --border-cyan:   rgba(56, 189, 248, 0.25);
+  --border:        rgba(15, 23, 42, 0.08);
+  --border-mid:    rgba(15, 23, 42, 0.14);
+  --border-hi:     rgba(15, 23, 42, 0.22);
+  --border-amber:  rgba(217, 119, 6, 0.35);
+  --border-green:  rgba(4, 120, 87, 0.24);
+  --border-cyan:   rgba(37, 99, 235, 0.22);
 
   /* Typography */
-  --text-primary:   #E8EEF8;
-  --text-secondary: #8A96B4;
-  --text-muted:     #4A5572;
-  --text-dim:       #2A3348;
+  --text-primary:   #0F172A;
+  --text-secondary: #334155;
+  --text-muted:     #64748B;
+  --text-dim:       #94A3B8;
+  --ink:            #172033;
+  --muted:          #64748B;
 
-  /* Accent — amber (headlights, warnings, driving) */
-  --amber:      #F5A623;
-  --amber-dim:  rgba(245, 166, 35, 0.12);
-  --amber-mid:  rgba(245, 166, 35, 0.25);
-  --amber-glow: rgba(245, 166, 35, 0.08);
+  /* Accents */
+  --gold:       #D97706;
+  --amber:      #D97706;
+  --amber-dim:  rgba(217, 119, 6, 0.10);
+  --amber-mid:  rgba(217, 119, 6, 0.18);
+  --amber-glow: rgba(217, 119, 6, 0.10);
+  --green:      #047857;
+  --green-dim:  rgba(4, 120, 87, 0.10);
+  --blue:       #2563EB;
+  --red:        #DC2626;
+  --rule-bg:    #F3F8F6;
+  --rule-border: rgba(4, 120, 87, 0.18);
 
-  /* Accent — cyan (on-duty, data readouts) */
-  --cyan:      #38BDF8;
-  --cyan-dim:  rgba(56, 189, 248, 0.10);
+  /* Accent aliases */
+  --cyan:      #2563EB;
+  --cyan-dim:  rgba(37, 99, 235, 0.10);
 
   /* Duty status colors */
-  --status-driving:  #F5A623;
-  --status-on-duty:  #38BDF8;
-  --status-off-duty: #374B6E;
-  --status-sleeper:  #7C3AED;
+  --status-driving:  #D97706;
+  --status-on-duty:  #047857;
+  --status-off-duty: #475569;
+  --status-sleeper:  #2563EB;
 
   /* Fonts */
-  --font-display: 'Barlow Condensed', sans-serif;
-  --font-mono:    'DM Mono', monospace;
+  --font-display: 'Poppins', sans-serif;
+  --font-body:    'Open Sans', sans-serif;
+  --font-mono:    'IBM Plex Mono', monospace;
 }
 
 @theme inline {
-  --font-sans: 'Barlow Condensed', sans-serif;
-  --font-mono: 'DM Mono', monospace;
+  --font-sans: 'Open Sans', sans-serif;
+  --font-mono: 'IBM Plex Mono', monospace;
   --color-background: var(--bg);
   --color-foreground: var(--text-primary);
 }
@@ -66,17 +77,20 @@ html {
 body {
   background: var(--bg);
   color: var(--text-primary);
-  font-family: var(--font-display);
-  letter-spacing: 0.01em;
+  font-family: var(--font-body);
+  font-size: 16px;
+  letter-spacing: 0;
 }
 
-/* Dot-grid background texture */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
-  background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
-  background-size: 28px 28px;
+  background:
+    linear-gradient(135deg, rgba(4, 120, 87, 0.08), transparent 34%),
+    linear-gradient(315deg, rgba(217, 119, 6, 0.08), transparent 30%),
+    radial-gradient(circle, rgba(15, 23, 42, 0.045) 1px, transparent 1px);
+  background-size: auto, auto, 28px 28px;
   pointer-events: none;
   z-index: 0;
 }
@@ -89,8 +103,8 @@ body::before {
 
 /* Inputs */
 input {
-  font-family: var(--font-mono);
-  font-size: 0.875rem;
+  font-family: var(--font-body);
+  font-size: 1rem;
   background: var(--surface-2);
   color: var(--text-primary);
   border: 1px solid var(--border-mid);
@@ -103,9 +117,9 @@ input {
 }
 
 input:focus {
-  border-color: var(--amber);
-  box-shadow: 0 0 0 3px var(--amber-glow), 0 0 0 1px var(--amber);
-  background: var(--surface-3);
+  border-color: var(--green);
+  box-shadow: 0 0 0 3px var(--green-dim), 0 0 0 1px var(--green);
+  background: #fff;
 }
 
 input::placeholder {
@@ -127,7 +141,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 /* Leaflet dark theme overrides */
 .leaflet-container {
-  background: #07090E;
+  background: #E8EEF5;
   font-family: var(--font-mono);
 }
 
@@ -136,7 +150,7 @@ input[type="time"]::-webkit-calendar-picker-indicator {
   background: var(--surface-3);
   color: var(--text-primary);
   border: 1px solid var(--border-hi);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+  box-shadow: 0 8px 32px rgba(15, 23, 42, 0.18);
 }
 
 .leaflet-popup-content-wrapper {
@@ -184,4 +198,27 @@ input[type="time"]::-webkit-calendar-picker-indicator {
 
 .animate-spin {
   animation: spin 0.8s linear infinite;
+}
+
+@media (max-width: 920px) {
+  .planner-main header {
+    position: static !important;
+    height: auto !important;
+    min-height: 58px;
+    gap: 12px;
+    flex-wrap: wrap;
+    padding: 12px 16px !important;
+  }
+
+  .planner-layout {
+    grid-template-columns: 1fr !important;
+    height: auto !important;
+    min-height: calc(100vh - 82px);
+    overflow: visible !important;
+  }
+
+  .planner-sidebar {
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-mid);
+  }
 }

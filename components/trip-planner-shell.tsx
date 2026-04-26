@@ -1,7 +1,24 @@
 "use client";
 
-import { FormEvent, startTransition, useState, useMemo } from "react";
+import { FormEvent, startTransition, useState, useMemo, type ReactNode } from "react";
 import dynamic from "next/dynamic";
+import {
+  CalendarClock,
+  Clock3,
+  FileText,
+  Fuel,
+  Gauge,
+  LoaderCircle,
+  LocateFixed,
+  Map,
+  MapPin,
+  Navigation,
+  PackageCheck,
+  Route,
+  ShieldCheck,
+  TimerReset,
+  Truck,
+} from "lucide-react";
 
 import { LogSheetRenderer } from "@/components/log-sheet-renderer";
 import {
@@ -9,6 +26,7 @@ import {
   type PlanTripRequest,
   type PlanTripResponse,
   type TripSegment,
+  type LogDetails,
 } from "@/lib/api";
 
 // ─── Dynamic map import (SSR disabled) ────────────────────────────────────────
@@ -39,38 +57,49 @@ type FormState = {
   departure_time:   string;
 };
 
+export type LogMeta = {
+  driver_name: string;
+  carrier_name: string;
+  truck_number: string;
+  trailer_number: string;
+  co_driver: string;
+  shipping_doc: string;
+};
+
 type ResultTab = "map" | "sequence" | "stops" | "logs";
 
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { color: string; label: string }> = {
   DRIVING:             { color: "#D97706", label: "Driving" },
-  ON_DUTY_NOT_DRIVING: { color: "#0E7490", label: "On Duty" },
-  OFF_DUTY:            { color: "#374B6E", label: "Off Duty" },
-  SLEEPER_BERTH:       { color: "#5B21B6", label: "Sleeper" },
+  ON_DUTY_NOT_DRIVING: { color: "#047857", label: "On Duty" },
+  OFF_DUTY:            { color: "#475569", label: "Off Duty" },
+  SLEEPER_BERTH:       { color: "#2563EB", label: "Sleeper" },
 };
 
 const WAYPOINT_COLORS: Record<string, string> = {
-  current: "#F5A623",
-  pickup:  "#22C55E",
-  dropoff: "#EF4444",
-  fuel:    "#FB923C",
-  rest:    "#6B7A9B",
+  current: "#D97706",
+  pickup:  "#047857",
+  dropoff: "#DC2626",
+  fuel:    "#EA580C",
+  rest:    "#2563EB",
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function todayString() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function toPayload(f: FormState): PlanTripRequest {
+function toPayload(f: FormState, logMeta: LogMeta): PlanTripRequest {
   return {
     current_location: f.current_location.trim(),
     pickup_location:  f.pickup_location.trim(),
     dropoff_location: f.dropoff_location.trim(),
     cycle_used_hours: Number(f.cycle_used_hours),
     departure_datetime: `${f.departure_date}T${f.departure_time}:00`,
+    driver_name: logMeta.driver_name.trim(),
+    carrier_name: logMeta.carrier_name.trim(),
+    truck_number: logMeta.truck_number.trim(),
+    trailer_number: logMeta.trailer_number.trim(),
+    co_driver: logMeta.co_driver.trim(),
+    shipping_doc: logMeta.shipping_doc.trim(),
   };
 }
 
@@ -104,17 +133,33 @@ function countByLabel(segs: TripSegment[], label: string): number {
 
 // ─── Main shell ───────────────────────────────────────────────────────────────
 
-const INITIAL_FORM: FormState = {
-  current_location: "Chicago, IL",
-  pickup_location:  "Indianapolis, IN",
-  dropoff_location: "Nashville, TN",
-  cycle_used_hours: "0",
-  departure_date:   "2024-04-26",
-  departure_time:   "06:00",
+const INITIAL_LOG_META: LogMeta = {
+  driver_name: "",
+  carrier_name: "",
+  truck_number: "",
+  trailer_number: "",
+  co_driver: "",
+  shipping_doc: "",
 };
 
+function createInitialForm(): FormState {
+  const now = new Date();
+  const yyyy = now.getFullYear();
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  return {
+    current_location: "",
+    pickup_location: "",
+    dropoff_location: "",
+    cycle_used_hours: "0",
+    departure_date: `${yyyy}-${mm}-${dd}`,
+    departure_time: now.toTimeString().slice(0, 5),
+  };
+}
+
 export function TripPlannerShell() {
-  const [form, setForm]           = useState<FormState>(INITIAL_FORM);
+  const [form, setForm]           = useState<FormState>(() => createInitialForm());
+  const [logMeta, setLogMeta]     = useState<LogMeta>(INITIAL_LOG_META);
   const [result, setResult]       = useState<PlanTripResponse | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [loading, setLoading]     = useState(false);
@@ -143,7 +188,7 @@ export function TripPlannerShell() {
       const res = await fetch(buildPlanTripUrl("compact"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(toPayload(form)),
+        body: JSON.stringify(toPayload(form, logMeta)),
       });
       const data = (await res.json()) as PlanTripResponse | { error?: unknown };
       if (!res.ok) {
@@ -167,12 +212,25 @@ export function TripPlannerShell() {
     setForm((f) => ({ ...f, [id]: value }));
   }
 
+  function metaField(id: keyof LogMeta, value: string) {
+    setLogMeta((f) => ({ ...f, [id]: value }));
+  }
+
   const segs  = result?.trip_segments ?? [];
   const logs  = result?.log_sheets    ?? [];
   const route = result?.route;
+  const logDetails: LogDetails = result?.log_details ?? {
+    driver_name: logMeta.driver_name || "N/A",
+    carrier_name: logMeta.carrier_name || "Trip Planner Co.",
+    truck_number: logMeta.truck_number || "N/A",
+    trailer_number: logMeta.trailer_number || "N/A",
+    co_driver: logMeta.co_driver || "N/A",
+    shipping_doc: logMeta.shipping_doc || "N/A",
+  };
 
   return (
     <main
+      className="planner-main"
       style={{
         minHeight: "100vh",
         background: "var(--bg)",
@@ -185,7 +243,7 @@ export function TripPlannerShell() {
       <header
         style={{
           borderBottom: "1px solid var(--border-mid)",
-          background: "rgba(13,18,24,0.9)",
+          background: "rgba(248,250,252,0.92)",
           backdropFilter: "blur(12px)",
           position: "sticky",
           top: 0,
@@ -198,23 +256,19 @@ export function TripPlannerShell() {
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          {/* Logo mark */}
           <div
             style={{
               width: "28px",
               height: "28px",
               borderRadius: "6px",
-              background: "var(--amber)",
+              background: "var(--ink)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               flexShrink: 0,
             }}
           >
-            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
-              <path d="M2 12 L8 4 L14 12" stroke="#0D1117" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M5 12 L11 12" stroke="#0D1117" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
+            <Truck size={17} color="#fff" strokeWidth={2.2} />
           </div>
 
           <div>
@@ -225,7 +279,7 @@ export function TripPlannerShell() {
                 fontWeight: 700,
                 letterSpacing: "0.08em",
                 textTransform: "uppercase",
-                color: "var(--text-primary)",
+                color: "var(--ink)",
                 lineHeight: 1,
               }}
             >
@@ -235,7 +289,7 @@ export function TripPlannerShell() {
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: "9px",
-                color: "var(--text-muted)",
+                color: "var(--muted)",
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
                 marginTop: "2px",
@@ -247,13 +301,14 @@ export function TripPlannerShell() {
         </div>
 
         <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-          <StatusPill color="var(--amber)" label="70-hr / 8-day" />
-          <StatusPill color="#22C55E" label="Property Carrier" />
+          <StatusPill color="var(--green)" label="70-hr / 8-day" icon={<ShieldCheck size={12} />} />
+          <StatusPill color="var(--blue)" label="Property Carrier" icon={<Truck size={12} />} />
         </div>
       </header>
 
       {/* ── Body ────────────────────────────────────────────────────────────── */}
       <div
+        className="planner-layout"
         style={{
           display: "grid",
           gridTemplateColumns: "340px 1fr",
@@ -264,6 +319,7 @@ export function TripPlannerShell() {
 
         {/* ══ LEFT — Form panel ══════════════════════════════════════════════ */}
         <aside
+          className="planner-sidebar"
           style={{
             borderRight: "1px solid var(--border-mid)",
             background: "var(--surface-1)",
@@ -283,7 +339,7 @@ export function TripPlannerShell() {
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: "9px",
-                color: "var(--amber)",
+                color: "var(--green)",
                 letterSpacing: "0.16em",
                 textTransform: "uppercase",
                 marginBottom: "4px",
@@ -298,7 +354,7 @@ export function TripPlannerShell() {
                 fontWeight: 700,
                 letterSpacing: "0.04em",
                 textTransform: "uppercase",
-                color: "var(--text-primary)",
+                color: "var(--ink)",
                 lineHeight: 1,
               }}
             >
@@ -308,7 +364,7 @@ export function TripPlannerShell() {
               style={{
                 fontFamily: "var(--font-mono)",
                 fontSize: "11px",
-                color: "var(--text-muted)",
+                color: "var(--muted)",
                 marginTop: "6px",
                 lineHeight: 1.5,
               }}
@@ -333,45 +389,32 @@ export function TripPlannerShell() {
               <FormField
                 id="current_location"
                 label="Current Location"
-                placeholder="e.g. Chicago, IL"
+                placeholder="Enter any city, address, or terminal"
                 value={form.current_location}
                 onChange={(v) => field("current_location", v)}
                 hint="Your starting position"
-                icon={
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
-                    <circle cx="6" cy="6" r="2.5"/>
-                    <circle cx="6" cy="6" r="5" fill="none" stroke="currentColor" strokeWidth="1"/>
-                  </svg>
-                }
-                iconColor="var(--amber)"
+                icon={<LocateFixed size={13} />}
+                iconColor="var(--gold)"
               />
               <FormField
                 id="pickup_location"
                 label="Pickup Location"
-                placeholder="e.g. Indianapolis, IN"
+                placeholder="Enter pickup city or address"
                 value={form.pickup_location}
                 onChange={(v) => field("pickup_location", v)}
                 hint="Where you collect the load"
-                icon={
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
-                    <path d="M6 1 L6 11 M3 8 L6 11 L9 8" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                }
-                iconColor="#22C55E"
+                icon={<PackageCheck size={13} />}
+                iconColor="var(--green)"
               />
               <FormField
                 id="dropoff_location"
                 label="Dropoff Location"
-                placeholder="e.g. Nashville, TN"
+                placeholder="Enter dropoff city or address"
                 value={form.dropoff_location}
                 onChange={(v) => field("dropoff_location", v)}
                 hint="Final delivery point"
-                icon={
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="currentColor">
-                    <path d="M6 1 L9 4.5 L6 4.5 L6 8 M3 8 L6 11 L9 8" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                }
-                iconColor="#EF4444"
+                icon={<MapPin size={13} />}
+                iconColor="var(--red)"
               />
             </FormSection>
 
@@ -388,13 +431,8 @@ export function TripPlannerShell() {
                 max="69.9"
                 step="0.5"
                 hint="Hours used in current 70-hr / 8-day cycle"
-                icon={
-                  <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2">
-                    <circle cx="6" cy="6" r="4.5"/>
-                    <path d="M6 3.5 L6 6 L8 7.5" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                }
-                iconColor="var(--cyan)"
+                icon={<Gauge size={13} />}
+                iconColor="var(--blue)"
               />
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
                 <FormField
@@ -414,11 +452,91 @@ export function TripPlannerShell() {
               </div>
             </FormSection>
 
+            <details
+              style={{
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                background: "var(--surface-2)",
+                overflow: "hidden",
+              }}
+            >
+              <summary
+                style={{
+                  cursor: "pointer",
+                  listStyle: "none",
+                  padding: "12px",
+                  fontFamily: "var(--font-display)",
+                  fontSize: "13px",
+                  fontWeight: 700,
+                  color: "var(--ink)",
+                  letterSpacing: "0.02em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <FileText size={15} color="var(--green)" />
+                Optional log details
+              </summary>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "0 12px 12px" }}>
+                <FormField
+                  id="driver_name"
+                  label="Driver Name"
+                  placeholder="N/A"
+                  value={logMeta.driver_name}
+                  onChange={(v) => metaField("driver_name", v)}
+                  required={false}
+                />
+                <FormField
+                  id="carrier_name"
+                  label="Carrier Name"
+                  placeholder="Trip Planner Co."
+                  value={logMeta.carrier_name}
+                  onChange={(v) => metaField("carrier_name", v)}
+                  required={false}
+                />
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <FormField
+                    id="truck_number"
+                    label="Truck Number"
+                    placeholder="N/A"
+                    value={logMeta.truck_number}
+                    onChange={(v) => metaField("truck_number", v)}
+                    required={false}
+                  />
+                  <FormField
+                    id="trailer_number"
+                    label="Trailer Number"
+                    placeholder="N/A"
+                    value={logMeta.trailer_number}
+                    onChange={(v) => metaField("trailer_number", v)}
+                    required={false}
+                  />
+                </div>
+                <FormField
+                  id="co_driver"
+                  label="Co-driver Name"
+                  placeholder="N/A"
+                  value={logMeta.co_driver}
+                  onChange={(v) => metaField("co_driver", v)}
+                  required={false}
+                />
+                <FormField
+                  id="shipping_doc"
+                  label="Shipping Document Number"
+                  placeholder="N/A"
+                  value={logMeta.shipping_doc}
+                  onChange={(v) => metaField("shipping_doc", v)}
+                  required={false}
+                />
+              </div>
+            </details>
+
             {/* HOS rules reminder */}
             <div
               style={{
-                background: "var(--amber-dim)",
-                border: "1px solid var(--border-amber)",
+                background: "var(--rule-bg)",
+                border: "1px solid var(--rule-border)",
                 borderRadius: "6px",
                 padding: "10px 12px",
                 display: "grid",
@@ -427,28 +545,20 @@ export function TripPlannerShell() {
               }}
             >
               {[
-                ["11-hr drive limit", "per shift"],
-                ["14-hr duty window", "per shift"],
-                ["30-min break", "after 8 hrs"],
-                ["10-hr reset", "off-duty"],
-                ["Fuel stop", "every 1,000 mi"],
-                ["1-hr pickup/dropoff", "each end"],
-              ].map(([rule, detail]) => (
+                { rule: "11-hr drive limit", detail: "per shift", icon: <Truck size={12} /> },
+                { rule: "14-hr duty window", detail: "per shift", icon: <Clock3 size={12} /> },
+                { rule: "30-min break", detail: "after 8 hrs", icon: <TimerReset size={12} /> },
+                { rule: "10-hr reset", detail: "off-duty", icon: <CalendarClock size={12} /> },
+                { rule: "Fuel stop", detail: "every 1,000 mi", icon: <Fuel size={12} /> },
+                { rule: "1-hr pickup/dropoff", detail: "each end", icon: <PackageCheck size={12} /> },
+              ].map(({ rule, detail, icon }) => (
                 <div key={rule} style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-                  <div
-                    style={{
-                      width: "4px",
-                      height: "4px",
-                      borderRadius: "1px",
-                      background: "var(--amber)",
-                      flexShrink: 0,
-                    }}
-                  />
+                  <span style={{ color: "var(--green)", display: "flex", flexShrink: 0 }}>{icon}</span>
                   <div>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--amber)", letterSpacing: "0.04em" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--ink)", letterSpacing: "0.04em" }}>
                       {rule}
                     </span>
-                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--text-muted)", marginLeft: "4px" }}>
+                    <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "var(--muted)", marginLeft: "4px" }}>
                       {detail}
                     </span>
                   </div>
@@ -479,8 +589,8 @@ export function TripPlannerShell() {
               type="submit"
               disabled={loading || !isValid}
               style={{
-                background: loading || !isValid ? "var(--surface-3)" : "var(--amber)",
-                color: loading || !isValid ? "var(--text-muted)" : "#0D1117",
+                background: loading || !isValid ? "var(--surface-3)" : "var(--ink)",
+                color: loading || !isValid ? "var(--text-muted)" : "#FFFFFF",
                 border: "none",
                 borderRadius: "6px",
                 padding: "12px 20px",
@@ -507,9 +617,7 @@ export function TripPlannerShell() {
                 </>
               ) : (
                 <>
-                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 8 L14 8 M9 3 L14 8 L9 13"/>
-                  </svg>
+                  <Navigation size={14} />
                   Plan Trip
                 </>
               )}
@@ -552,12 +660,7 @@ export function TripPlannerShell() {
                   justifyContent: "center",
                 }}
               >
-                <svg width="28" height="28" viewBox="0 0 28 28" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                  <circle cx="14" cy="14" r="11"/>
-                  <path d="M14 9 L14 14 L18 16"/>
-                  <path d="M7 20 L4 23"/>
-                  <path d="M21 20 L24 23"/>
-                </svg>
+                <Route size={28} color="var(--muted)" strokeWidth={1.7} />
               </div>
               <div>
                 <div
@@ -597,9 +700,9 @@ export function TripPlannerShell() {
                 }}
               >
                 {[
-                  { icon: "🗺️", label: "Route map with stops" },
-                  { icon: "📋", label: "FMCSA log sheets" },
-                  { icon: "⏱️", label: "HOS-compliant schedule" },
+                  { icon: <Map size={20} />, label: "Route map with stops" },
+                  { icon: <FileText size={20} />, label: "FMCSA log sheets" },
+                  { icon: <ShieldCheck size={20} />, label: "HOS-compliant schedule" },
                 ].map(({ icon, label }) => (
                   <div
                     key={label}
@@ -611,7 +714,7 @@ export function TripPlannerShell() {
                       textAlign: "center",
                     }}
                   >
-                    <div style={{ fontSize: "20px", marginBottom: "6px" }}>{icon}</div>
+                    <div style={{ color: "var(--green)", marginBottom: "6px", display: "flex", justifyContent: "center" }}>{icon}</div>
                     <div
                       style={{
                         fontFamily: "var(--font-mono)",
@@ -692,12 +795,12 @@ export function TripPlannerShell() {
               >
                 {(
                   [
-                    { id: "map",      label: "Route Map",       count: null },
-                    { id: "sequence", label: "Sequence",         count: segs.length },
-                    { id: "stops",    label: "Stops",            count: route!.waypoints.length },
-                    { id: "logs",     label: "Daily Logs",       count: logs.length },
-                  ] as { id: ResultTab; label: string; count: number | null }[]
-                ).map(({ id, label, count }) => (
+                    { id: "map",      label: "Route Map",       count: null, icon: <Map size={14} /> },
+                    { id: "sequence", label: "Sequence",         count: segs.length, icon: <Route size={14} /> },
+                    { id: "stops",    label: "Stops",            count: route!.waypoints.length, icon: <MapPin size={14} /> },
+                    { id: "logs",     label: "Daily Logs",       count: logs.length, icon: <FileText size={14} /> },
+                  ] as { id: ResultTab; label: string; count: number | null; icon: ReactNode }[]
+                ).map(({ id, label, count, icon }) => (
                   <button
                     key={id}
                     onClick={() => setActiveTab(id)}
@@ -710,8 +813,8 @@ export function TripPlannerShell() {
                       padding: "11px 18px",
                       background: "transparent",
                       border: "none",
-                      borderBottom: activeTab === id ? "2px solid var(--amber)" : "2px solid transparent",
-                      color: activeTab === id ? "var(--amber)" : "var(--text-muted)",
+                      borderBottom: activeTab === id ? "2px solid var(--green)" : "2px solid transparent",
+                      color: activeTab === id ? "var(--green)" : "var(--text-muted)",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -720,17 +823,18 @@ export function TripPlannerShell() {
                       transition: "color 160ms ease",
                     }}
                   >
+                    {icon}
                     {label}
                     {count !== null && (
                       <span
                         style={{
                           fontFamily: "var(--font-mono)",
                           fontSize: "10px",
-                          background: activeTab === id ? "var(--amber-dim)" : "var(--surface-3)",
-                          color: activeTab === id ? "var(--amber)" : "var(--text-muted)",
+                          background: activeTab === id ? "var(--green-dim)" : "var(--surface-3)",
+                          color: activeTab === id ? "var(--green)" : "var(--text-muted)",
                           borderRadius: "3px",
                           padding: "1px 5px",
-                          border: `1px solid ${activeTab === id ? "var(--border-amber)" : "var(--border)"}`,
+                          border: `1px solid ${activeTab === id ? "var(--border-green)" : "var(--border)"}`,
                         }}
                       >
                         {count}
@@ -756,7 +860,7 @@ export function TripPlannerShell() {
                         position: "absolute",
                         bottom: "16px",
                         left: "16px",
-                        background: "rgba(13,18,24,0.92)",
+                        background: "rgba(255,255,255,0.94)",
                         backdropFilter: "blur(8px)",
                         border: "1px solid var(--border-mid)",
                         borderRadius: "8px",
@@ -770,7 +874,7 @@ export function TripPlannerShell() {
                       {Object.entries(WAYPOINT_COLORS).map(([type, color]) => (
                         <div key={type} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <div style={{ width: "8px", height: "8px", borderRadius: "50%", background: color, flexShrink: 0 }} />
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-secondary)", textTransform: "capitalize" }}>
+                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--muted)", textTransform: "capitalize" }}>
                             {type}
                           </span>
                         </div>
@@ -863,7 +967,8 @@ export function TripPlannerShell() {
                                 </span>
                                 {seg.location && (
                                   <span style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-secondary)" }}>
-                                    📍 {seg.location}
+                                    <MapPin size={11} style={{ display: "inline", verticalAlign: "-2px", marginRight: "4px" }} />
+                                    {seg.location}
                                   </span>
                                 )}
                               </div>
@@ -987,10 +1092,10 @@ export function TripPlannerShell() {
                       }}
                     >
                       {[
-                        { status: "OFF_DUTY",            color: "#374B6E", label: "Off Duty" },
-                        { status: "SLEEPER_BERTH",       color: "#5B21B6", label: "Sleeper Berth" },
+                        { status: "OFF_DUTY",            color: "#475569", label: "Off Duty" },
+                        { status: "SLEEPER_BERTH",       color: "#2563EB", label: "Sleeper Berth" },
                         { status: "DRIVING",             color: "#D97706", label: "Driving" },
-                        { status: "ON_DUTY_NOT_DRIVING", color: "#0E7490", label: "On Duty (Not Driving)" },
+                        { status: "ON_DUTY_NOT_DRIVING", color: "#047857", label: "On Duty (Not Driving)" },
                       ].map(({ color, label }) => (
                         <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <div style={{ width: "12px", height: "12px", borderRadius: "2px", background: color }} />
@@ -1001,7 +1106,12 @@ export function TripPlannerShell() {
                       ))}
                     </div>
 
-                    <LogSheetRenderer logSheets={logs} />
+                    <LogSheetRenderer
+                      logSheets={logs}
+                      logMeta={logDetails}
+                      routeFrom={form.current_location}
+                      routeTo={form.dropoff_location}
+                    />
                   </div>
                 )}
               </div>
@@ -1015,7 +1125,7 @@ export function TripPlannerShell() {
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function FormSection({ label, children }: { label: string; children: React.ReactNode }) {
+function FormSection({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
       <div
@@ -1038,12 +1148,12 @@ function FormSection({ label, children }: { label: string; children: React.React
 
 function FormField({
   id, label, placeholder = "", value, onChange, type = "text",
-  min, max, step, hint, icon, iconColor,
+  min, max, step, hint, icon, iconColor, required = true,
 }: {
   id: string; label: string; placeholder?: string; value: string;
   onChange: (v: string) => void; type?: string;
   min?: string; max?: string; step?: string;
-  hint?: string; icon?: React.ReactNode; iconColor?: string;
+  hint?: string; icon?: ReactNode; iconColor?: string; required?: boolean;
 }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
@@ -1076,7 +1186,7 @@ function FormField({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        required
+        required={required}
       />
       {hint && (
         <div
@@ -1094,7 +1204,7 @@ function FormField({
   );
 }
 
-function StatusPill({ color, label }: { color: string; label: string }) {
+function StatusPill({ color, label, icon }: { color: string; label: string; icon: ReactNode }) {
   return (
     <div
       style={{
@@ -1107,7 +1217,7 @@ function StatusPill({ color, label }: { color: string; label: string }) {
         padding: "3px 8px",
       }}
     >
-      <div style={{ width: "5px", height: "5px", borderRadius: "50%", background: color }} />
+      <span style={{ display: "flex", color }}>{icon}</span>
       <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color, letterSpacing: "0.1em", textTransform: "uppercase" }}>
         {label}
       </span>
@@ -1138,7 +1248,7 @@ function SectionHeader({ label, desc }: { label: string; desc: string }) {
   );
 }
 
-function MapPlaceholder({ children }: { children: React.ReactNode }) {
+function MapPlaceholder({ children }: { children: ReactNode }) {
   return (
     <div
       style={{
@@ -1158,18 +1268,5 @@ function MapPlaceholder({ children }: { children: React.ReactNode }) {
 }
 
 function Spinner({ size = 16 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      className="animate-spin"
-    >
-      <path d="M8 1.5 A6.5 6.5 0 0 1 14.5 8"/>
-    </svg>
-  );
+  return <LoaderCircle size={size} className="animate-spin" />;
 }
