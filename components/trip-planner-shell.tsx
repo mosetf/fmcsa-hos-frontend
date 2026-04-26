@@ -105,7 +105,13 @@ function toPayload(f: FormState, logMeta: LogMeta): PlanTripRequest {
 
 function errorMessage(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "Request failed.";
-  const e = (payload as { error?: { message?: unknown } }).error;
+  const e = (payload as { error?: { code?: unknown; message?: unknown } }).error;
+  if (e?.code === "GEOCODING_FAILED") {
+    return "We could not find one of those locations. Try using a more specific format like 'Chicago, IL, USA' or 'Nairobi, Kenya'.";
+  }
+  if (e?.code === "ROUTING_FAILED") {
+    return "We found the locations, but could not build a truck route between them. Check spelling, add country/state, or choose a nearby city or terminal.";
+  }
   if (typeof e?.message === "string") return e.message;
   if (e?.message) return JSON.stringify(e.message);
   return "Request failed.";
@@ -853,6 +859,7 @@ export function TripPlannerShell() {
                     <TripRouteMap
                       polylineEncoded={route!.polyline_encoded}
                       waypoints={route!.waypoints}
+                      tripSegments={segs}
                     />
                     {/* Waypoint legend */}
                     <div

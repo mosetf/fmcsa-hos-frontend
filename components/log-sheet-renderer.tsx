@@ -124,10 +124,10 @@ function LogSheetPage({
     <article
       className="animate-fade-slide-up"
       style={{
-        background: "#f4f7fb",
-        border: "1px solid var(--border-mid)",
+        background: "#e8eef5",
+        border: "1px solid rgba(15, 23, 42, 0.22)",
         borderRadius: "8px",
-        padding: "14px",
+        padding: "18px",
         overflowX: "auto",
         animationDelay: `${sheetIndex * 80}ms`,
       }}
@@ -137,9 +137,9 @@ function LogSheetPage({
         width="100%"
         style={{
           display: "block",
-          minWidth: "880px",
+          minWidth: "960px",
           background: "#fff",
-          boxShadow: "0 18px 42px rgba(15, 23, 42, 0.14)",
+          boxShadow: "0 18px 48px rgba(15, 23, 42, 0.24)",
         }}
         role="img"
         aria-label={`Driver daily log sheet for ${sheet.date}`}
@@ -269,9 +269,9 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
         );
       })}
 
-      <rect x={PAGE_PAD} y={GRID_Y + HEADER_H} width={SVG_W - PAGE_PAD * 2} height={GRID_BODY_H} fill="#fff" stroke="#050505" strokeWidth={1.3} />
-      <line x1={GRID_X} y1={GRID_Y} x2={GRID_X} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.4} />
-      <line x1={GRID_X + GRID_W} y1={GRID_Y} x2={GRID_X + GRID_W} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.4} />
+      <rect x={PAGE_PAD} y={GRID_Y + HEADER_H} width={SVG_W - PAGE_PAD * 2} height={GRID_BODY_H} fill="#fff" stroke="#050505" strokeWidth={1.6} />
+      <line x1={GRID_X} y1={GRID_Y} x2={GRID_X} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.7} />
+      <line x1={GRID_X + GRID_W} y1={GRID_Y} x2={GRID_X + GRID_W} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.7} />
 
       {STATUS_ORDER.map((status, index) => {
         const y = GRID_Y + HEADER_H + index * ROW_H;
@@ -279,7 +279,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
         const total = totals[status] || 0;
         return (
           <g key={status}>
-            <line x1={PAGE_PAD} y1={y} x2={SVG_W - PAGE_PAD} y2={y} stroke="#1F2937" strokeWidth={0.9} />
+            <line x1={PAGE_PAD} y1={y} x2={SVG_W - PAGE_PAD} y2={y} stroke="#111827" strokeWidth={1.1} />
             <text x={PAGE_PAD + 9} y={centerY - (status === "ON_DUTY_NOT_DRIVING" ? 7 : 3)} fontFamily="Arial, sans-serif" fontSize={status === "ON_DUTY_NOT_DRIVING" ? 10 : 12} fontWeight={700} fill="#050505">
               {STATUS_CONFIG[status].label.split("\n").map((line, lineIndex) => (
                 <tspan key={line} x={PAGE_PAD + 9} dy={lineIndex === 0 ? 0 : 12}>
@@ -287,7 +287,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
                 </tspan>
               ))}
             </text>
-            <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#94A3B8" strokeWidth={0.8} />
+            <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#64748B" strokeWidth={0.9} />
             <text x={GRID_X + GRID_W + TOTAL_W / 2} y={centerY + 4} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={13} fill="#050505">
               {total > 0 ? total.toFixed(2) : ""}
             </text>
@@ -307,9 +307,9 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
             y1={GRID_Y + HEADER_H}
             x2={x}
             y2={GRID_Y + HEADER_H + GRID_BODY_H}
-            stroke="#64748B"
-            strokeWidth={hour ? 1.1 : 0.55}
-            opacity={hour ? 1 : 0.65}
+            stroke={hour ? "#334155" : "#94A3B8"}
+            strokeWidth={hour ? 1.15 : 0.65}
+            opacity={hour ? 1 : 0.78}
             strokeDasharray={hour ? undefined : half ? "2 4" : "1 5"}
           />
         );
