@@ -8,8 +8,8 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-space-grotesk);
-  --font-mono: var(--font-ibm-plex-mono);
+  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
 }
 
 * {
@@ -18,12 +18,25 @@
 
 html {
   background: var(--background);
+  scroll-behavior: smooth;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-space-grotesk), sans-serif;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  text-rendering: optimizeLegibility;
+}
+
+.leaflet-container {
+  background: #18110c;
+  font-family: "Avenir Next", "Segoe UI", sans-serif;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: #fff8ef;
+  color: #1f180f;
 }
 
 a,
@@ -35,6 +48,14 @@ input {
     background-color 180ms ease,
     box-shadow 180ms ease,
     transform 180ms ease;
+}
+
+button {
+  cursor: pointer;
+}
+
+input::placeholder {
+  color: rgba(87, 72, 53, 0.55);
 }
 
 ::selection {
