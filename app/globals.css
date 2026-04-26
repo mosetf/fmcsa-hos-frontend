@@ -1,63 +1,187 @@
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700;800;900&family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 @import "tailwindcss";
 
 :root {
-  --background: #eadfcb;
-  --foreground: #1f180f;
+  /* Core surfaces */
+  --bg:        #07090E;
+  --surface-1: #0D1218;
+  --surface-2: #111822;
+  --surface-3: #162030;
+  --surface-4: #1C2940;
+
+  /* Borders */
+  --border:        rgba(255, 255, 255, 0.06);
+  --border-mid:    rgba(255, 255, 255, 0.10);
+  --border-hi:     rgba(255, 255, 255, 0.16);
+  --border-amber:  rgba(245, 166, 35, 0.35);
+  --border-cyan:   rgba(56, 189, 248, 0.25);
+
+  /* Typography */
+  --text-primary:   #E8EEF8;
+  --text-secondary: #8A96B4;
+  --text-muted:     #4A5572;
+  --text-dim:       #2A3348;
+
+  /* Accent — amber (headlights, warnings, driving) */
+  --amber:      #F5A623;
+  --amber-dim:  rgba(245, 166, 35, 0.12);
+  --amber-mid:  rgba(245, 166, 35, 0.25);
+  --amber-glow: rgba(245, 166, 35, 0.08);
+
+  /* Accent — cyan (on-duty, data readouts) */
+  --cyan:      #38BDF8;
+  --cyan-dim:  rgba(56, 189, 248, 0.10);
+
+  /* Duty status colors */
+  --status-driving:  #F5A623;
+  --status-on-duty:  #38BDF8;
+  --status-off-duty: #374B6E;
+  --status-sleeper:  #7C3AED;
+
+  /* Fonts */
+  --font-display: 'Barlow Condensed', sans-serif;
+  --font-mono:    'DM Mono', monospace;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: "Avenir Next", "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", "SFMono-Regular", "Menlo", monospace;
+  --font-sans: 'Barlow Condensed', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+  --color-background: var(--bg);
+  --color-foreground: var(--text-primary);
 }
 
-* {
+*, *::before, *::after {
   box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
 html {
-  background: var(--background);
+  background: var(--bg);
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
-  text-rendering: optimizeLegibility;
+  background: var(--bg);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  letter-spacing: 0.01em;
 }
 
+/* Dot-grid background texture */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(255,255,255,0.025) 1px, transparent 1px);
+  background-size: 28px 28px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--surface-1); }
+::-webkit-scrollbar-thumb { background: var(--surface-4); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* Inputs */
+input {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--surface-2);
+  color: var(--text-primary);
+  border: 1px solid var(--border-mid);
+  border-radius: 6px;
+  padding: 0.625rem 0.875rem;
+  width: 100%;
+  outline: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  caret-color: var(--amber);
+}
+
+input:focus {
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-glow), 0 0 0 1px var(--amber);
+  background: var(--surface-3);
+}
+
+input::placeholder {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.5);
+  cursor: pointer;
+}
+
+/* Selection */
+::selection {
+  background: var(--amber-mid);
+  color: var(--text-primary);
+}
+
+/* Leaflet dark theme overrides */
 .leaflet-container {
-  background: #18110c;
-  font-family: "Avenir Next", "Segoe UI", sans-serif;
+  background: #07090E;
+  font-family: var(--font-mono);
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: #fff8ef;
-  color: #1f180f;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  border: 1px solid var(--border-hi);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
-a,
-button,
-input {
-  transition:
-    color 180ms ease,
-    border-color 180ms ease,
-    background-color 180ms ease,
-    box-shadow 180ms ease,
-    transform 180ms ease;
+.leaflet-popup-content-wrapper {
+  border-radius: 8px;
 }
 
-button {
-  cursor: pointer;
+.leaflet-popup-content {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }
 
-input::placeholder {
-  color: rgba(87, 72, 53, 0.55);
+.leaflet-control-zoom a {
+  background: var(--surface-2) !important;
+  color: var(--text-secondary) !important;
+  border-color: var(--border-mid) !important;
 }
 
-::selection {
-  background: rgba(59, 48, 35, 0.18);
+.leaflet-control-zoom a:hover {
+  background: var(--surface-3) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Animations */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulseAmber {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.animate-fade-slide-up {
+  animation: fadeSlideUp 0.3s ease both;
+}
+
+.animate-pulse-amber {
+  animation: pulseAmber 1.4s ease infinite;
+}
+
+.animate-spin {
+  animation: spin 0.8s linear infinite;
 }
