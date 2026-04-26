@@ -1,9 +1,10 @@
 "use client";
 
-import { FormEvent, startTransition, useMemo, useState } from "react";
+import { FormEvent, startTransition, useState } from "react";
 import dynamic from "next/dynamic";
 
-import { buildPlanTripUrl, type LogSheet, type PlanTripRequest, type PlanTripResponse } from "@/lib/api";
+import { LogSheetRenderer } from "@/components/log-sheet-renderer";
+import { buildPlanTripUrl, type PlanTripRequest, type PlanTripResponse } from "@/lib/api";
 
 const TripRouteMap = dynamic(
   () => import("@/components/trip-route-map").then((module) => module.TripRouteMap),
@@ -91,18 +92,11 @@ function describeTripWindow(segments: PlanTripResponse["trip_segments"]): string
   return `${hours.toFixed(1)} hr total window`;
 }
 
-/** Return the first chronological log sheet for the compact review panel. */
-function getPrimaryLogSheet(logSheets: LogSheet[]): LogSheet | null {
-  return logSheets.length > 0 ? logSheets[0] : null;
-}
-
 export function TripPlannerShell() {
   const [form, setForm] = useState<FormState>(INITIAL_FORM);
   const [result, setResult] = useState<PlanTripResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const primaryLogSheet = useMemo(() => getPrimaryLogSheet(result?.log_sheets || []), [result]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -384,30 +378,18 @@ export function TripPlannerShell() {
                   </div>
                 </div>
 
-                {primaryLogSheet ? (
+                {result.log_sheets.length > 0 ? (
                   <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2">
                         <GridIcon className="h-4 w-4 text-amber-300" />
-                        <p className="text-sm font-semibold text-stone-100">Daily log snapshot</p>
+                        <p className="text-sm font-semibold text-stone-100">Driver daily logs</p>
                       </div>
-                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">{primaryLogSheet.date}</p>
+                      <p className="text-xs uppercase tracking-[0.2em] text-stone-400">
+                        {result.log_sheets.length} sheet{result.log_sheets.length === 1 ? "" : "s"}
+                      </p>
                     </div>
-                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                      {Object.entries(primaryLogSheet.totals).map(([status, hours]) => (
-                        <StatCard
-                          key={status}
-                          icon={<ClockIcon className="h-5 w-5" />}
-                          label={status.replaceAll("_", " ")}
-                          value={`${hours.toFixed(2)} hr`}
-                        />
-                      ))}
-                    </div>
-                    <div className="grid gap-3 rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-4 sm:grid-cols-3">
-                      <SummaryMetric label="Miles logged" value={`${primaryLogSheet.total_miles.toFixed(2)} mi`} />
-                      <SummaryMetric label="24 hr check" value={`${primaryLogSheet.total_check.toFixed(2)} hr`} />
-                      <SummaryMetric label="Remarks" value={`${primaryLogSheet.remarks.length}`} />
-                    </div>
+                    <LogSheetRenderer logSheets={result.log_sheets} />
                   </div>
                 ) : null}
               </>
@@ -500,15 +482,6 @@ function StatCard({ icon, label, value }: { icon: React.ReactNode; label: string
         <span className="text-amber-200">{icon}</span>
       </div>
       <p className="mt-4 text-2xl font-semibold tracking-[-0.05em] text-stone-50">{value}</p>
-    </div>
-  );
-}
-
-function SummaryMetric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="grid gap-1">
-      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">{label}</p>
-      <p className="text-lg font-semibold text-stone-50">{value}</p>
     </div>
   );
 }
