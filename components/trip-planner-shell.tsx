@@ -27,6 +27,8 @@ type FormState = {
   departure_time: string;
 };
 
+type ResultView = "map" | "sequence" | "stops" | "logs";
+
 const INITIAL_FORM: FormState = {
   current_location: "Chicago, IL",
   pickup_location: "Indianapolis, IN",
@@ -97,6 +99,7 @@ export function TripPlannerShell() {
   const [result, setResult] = useState<PlanTripResponse | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeView, setActiveView] = useState<ResultView>("map");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -121,6 +124,7 @@ export function TripPlannerShell() {
 
       startTransition(() => {
         setResult(payload as PlanTripResponse);
+        setActiveView((payload as PlanTripResponse).log_sheets.length > 0 ? "map" : "sequence");
       });
     } catch {
       setResult(null);
@@ -146,13 +150,13 @@ export function TripPlannerShell() {
                   Professional trip planning with route, duty flow, and daily log visibility.
                 </h1>
                 <p className="max-w-2xl text-base leading-7 text-stone-650 md:text-lg">
-                  Submit a trip once and review the route geometry, operational sequence, and early log output in one
-                  clean planner view.
+                  Submit a trip once, then review the route, stop sequence, and daily logs in a calmer step-by-step
+                  workspace.
                 </p>
               </div>
             </div>
 
-            <div className="grid gap-3 self-start">
+            <div className="grid gap-3 self-start md:grid-cols-3 lg:grid-cols-1">
               <QuickNote
                 icon={<RouteIcon className="h-4 w-4" />}
                 title="Structured trip inputs"
@@ -175,7 +179,7 @@ export function TripPlannerShell() {
         <section className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
           <form
             onSubmit={handleSubmit}
-            className="grid gap-6 rounded-[2rem] border border-stone-900/8 bg-white/84 p-6 shadow-[0_18px_70px_rgba(67,52,34,0.08)] backdrop-blur md:p-7"
+            className="grid self-start gap-6 rounded-[2rem] border border-stone-900/8 bg-white/84 p-6 shadow-[0_18px_70px_rgba(67,52,34,0.08)] backdrop-blur md:p-7 xl:sticky xl:top-6"
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
@@ -262,7 +266,7 @@ export function TripPlannerShell() {
             ) : null}
           </form>
 
-          <section className="grid gap-5 rounded-[2rem] border border-stone-900/8 bg-[#201812] p-6 text-stone-100 shadow-[0_24px_90px_rgba(55,40,24,0.18)] md:p-7">
+          <section className="grid self-start gap-5 rounded-[2rem] border border-stone-900/8 bg-[#201812] p-6 text-stone-100 shadow-[0_24px_90px_rgba(55,40,24,0.18)] md:p-7">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-[0.28em] text-stone-500">Trip summary</p>
@@ -310,81 +314,124 @@ export function TripPlannerShell() {
                   />
                 </div>
 
-                <div className="grid gap-4">
-                  <div className="flex items-center gap-2">
-                    <MapIcon className="h-4 w-4 text-amber-300" />
-                    <p className="text-sm font-semibold text-stone-100">Route map</p>
-                  </div>
-                  <TripRouteMap
-                    polylineEncoded={result.route.polyline_encoded}
-                    waypoints={result.route.waypoints}
-                  />
-                </div>
-
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.92fr)]">
-                  <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-5">
-                    <div className="flex items-center gap-2">
-                      <SequenceIcon className="h-4 w-4 text-amber-300" />
-                      <p className="text-sm font-semibold text-stone-100">Operational sequence</p>
+                <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-[0.22em] text-stone-500">Result workspace</p>
+                      <h3 className="text-lg font-semibold text-stone-50">Review one trip artifact at a time</h3>
                     </div>
-                    <ol className="grid gap-3">
-                      {result.trip_segments.slice(0, 6).map((segment, index) => (
-                        <li
-                          key={`${segment.start}-${segment.label}`}
-                          className="grid gap-2 rounded-[1.25rem] border border-white/6 bg-black/10 px-4 py-3"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3">
-                              <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-300/14 text-xs font-semibold text-amber-200">
-                                {index + 1}
-                              </span>
-                              <div>
-                                <p className="text-sm font-semibold text-stone-50">{segment.label}</p>
-                                <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{segment.type}</p>
+                    <div className="flex flex-wrap gap-2">
+                      <ResultTab
+                        active={activeView === "map"}
+                        icon={<MapIcon className="h-4 w-4" />}
+                        label="Map"
+                        onClick={() => setActiveView("map")}
+                      />
+                      <ResultTab
+                        active={activeView === "sequence"}
+                        icon={<SequenceIcon className="h-4 w-4" />}
+                        label="Sequence"
+                        onClick={() => setActiveView("sequence")}
+                      />
+                      <ResultTab
+                        active={activeView === "stops"}
+                        icon={<PinIcon className="h-4 w-4" />}
+                        label="Stops"
+                        onClick={() => setActiveView("stops")}
+                      />
+                      <ResultTab
+                        active={activeView === "logs"}
+                        icon={<GridIcon className="h-4 w-4" />}
+                        label={`Logs (${result.log_sheets.length})`}
+                        onClick={() => setActiveView("logs")}
+                      />
+                    </div>
+                  </div>
+
+                  {activeView === "map" ? (
+                    <div className="grid gap-4">
+                      <SectionHeading
+                        icon={<MapIcon className="h-4 w-4 text-amber-300" />}
+                        title="Route map"
+                        subtitle="Follow the full geometry and inspect the key trip stops."
+                      />
+                      <TripRouteMap
+                        polylineEncoded={result.route.polyline_encoded}
+                        waypoints={result.route.waypoints}
+                      />
+                    </div>
+                  ) : null}
+
+                  {activeView === "sequence" ? (
+                    <div className="grid gap-4">
+                      <SectionHeading
+                        icon={<SequenceIcon className="h-4 w-4 text-amber-300" />}
+                        title="Operational sequence"
+                        subtitle="Review the duty-status flow in the order it unfolds."
+                      />
+                      <ol className="grid gap-3">
+                        {result.trip_segments.map((segment, index) => (
+                          <li
+                            key={`${segment.start}-${segment.label}`}
+                            className="grid gap-2 rounded-[1.25rem] border border-white/6 bg-black/10 px-4 py-3"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex min-w-0 items-start gap-3">
+                                <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-amber-300/14 text-xs font-semibold text-amber-200">
+                                  {index + 1}
+                                </span>
+                                <div className="min-w-0">
+                                  <p className="text-sm font-semibold text-stone-50">{segment.label}</p>
+                                  <p className="break-all text-xs uppercase tracking-[0.2em] text-stone-500">{segment.type}</p>
+                                </div>
                               </div>
+                              <p className="shrink-0 text-right text-xs text-stone-400">{formatSegmentTime(segment.start)}</p>
                             </div>
-                            <p className="text-xs text-stone-400">{formatSegmentTime(segment.start)}</p>
-                          </div>
-                          <div className="flex items-center justify-between gap-3 text-sm text-stone-300">
-                            <span>{segment.location || "In transit"}</span>
-                            <span>{segment.distance_miles.toFixed(2)} mi</span>
-                          </div>
-                        </li>
-                      ))}
-                    </ol>
-                  </div>
+                            <div className="flex flex-col gap-1 text-sm text-stone-300 sm:flex-row sm:items-center sm:justify-between">
+                              <span>{segment.location || "In transit"}</span>
+                              <span>{segment.distance_miles.toFixed(2)} mi</span>
+                            </div>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                  ) : null}
 
-                  <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-5">
-                    <div className="flex items-center gap-2">
-                      <PinIcon className="h-4 w-4 text-amber-300" />
-                      <p className="text-sm font-semibold text-stone-100">Route stops</p>
-                    </div>
-                    <div className="grid gap-3">
-                      {result.route.waypoints.map((waypoint) => (
-                        <div
-                          key={`${waypoint.type}-${waypoint.label}`}
-                          className="flex items-center justify-between gap-3 rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3"
-                        >
-                          <div>
-                            <p className="text-sm font-semibold text-stone-50">{waypoint.label}</p>
-                            <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{waypoint.type}</p>
+                  {activeView === "stops" ? (
+                    <div className="grid gap-4">
+                      <SectionHeading
+                        icon={<PinIcon className="h-4 w-4 text-amber-300" />}
+                        title="Route stops"
+                        subtitle="Check the key stop markers and coordinates without the map crowding the view."
+                      />
+                      <div className="grid gap-3">
+                        {result.route.waypoints.map((waypoint) => (
+                          <div
+                            key={`${waypoint.type}-${waypoint.label}`}
+                            className="flex flex-col gap-2 rounded-[1.2rem] border border-white/6 bg-black/10 px-4 py-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-semibold text-stone-50">{waypoint.label}</p>
+                              <p className="text-xs uppercase tracking-[0.2em] text-stone-500">{waypoint.type}</p>
+                            </div>
+                            <p className="text-xs text-stone-400">
+                              {waypoint.lat.toFixed(3)}, {waypoint.lng.toFixed(3)}
+                            </p>
                           </div>
-                          <p className="text-xs text-stone-400">
-                            {waypoint.lat.toFixed(3)}, {waypoint.lng.toFixed(3)}
-                          </p>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  ) : null}
                 </div>
 
-                {result.log_sheets.length > 0 ? (
-                  <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="flex items-center gap-2">
-                        <GridIcon className="h-4 w-4 text-amber-300" />
-                        <p className="text-sm font-semibold text-stone-100">Driver daily logs</p>
-                      </div>
+                {activeView === "logs" ? (
+                  <div className="grid gap-4 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-4 sm:p-5">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <SectionHeading
+                        icon={<GridIcon className="h-4 w-4 text-amber-300" />}
+                        title="Driver daily logs"
+                        subtitle="Review each sheet in a dedicated, fuller-width canvas."
+                      />
                       <p className="text-xs uppercase tracking-[0.2em] text-stone-400">
                         {result.log_sheets.length} sheet{result.log_sheets.length === 1 ? "" : "s"}
                       </p>
@@ -461,6 +508,53 @@ function QuickNote({ icon, title, text }: { icon: React.ReactNode; title: string
       </div>
       <p className="text-sm font-semibold text-stone-50">{title}</p>
       <p className="mt-2 text-sm leading-6 text-stone-300">{text}</p>
+    </div>
+  );
+}
+
+function ResultTab({
+  active,
+  icon,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "bg-amber-300 text-stone-950 shadow-[0_10px_24px_rgba(245,165,36,0.16)]"
+          : "bg-white/[0.04] text-stone-300 hover:bg-white/[0.08] hover:text-stone-100"
+      }`}
+    >
+      {icon}
+      <span>{label}</span>
+    </button>
+  );
+}
+
+function SectionHeading({
+  icon,
+  title,
+  subtitle,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center gap-2">
+        {icon}
+        <p className="text-sm font-semibold text-stone-100">{title}</p>
+      </div>
+      <p className="text-sm leading-6 text-stone-400">{subtitle}</p>
     </div>
   );
 }

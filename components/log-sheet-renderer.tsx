@@ -25,11 +25,11 @@ type LogSheetRendererProps = {
 /** Render one or more FMCSA-style daily logs using the structured backend grid output. */
 export function LogSheetRenderer({ logSheets }: LogSheetRendererProps) {
   return (
-    <div className="grid gap-5">
+    <div className="grid gap-6">
       {logSheets.map((logSheet) => (
         <article
           key={logSheet.date}
-          className="grid gap-5 rounded-[1.6rem] border border-white/8 bg-white/[0.04] p-5"
+          className="grid gap-5 rounded-[1.7rem] border border-white/8 bg-[#17110d] p-4 sm:p-5 lg:p-6"
         >
           <header className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
             <div className="space-y-1">
@@ -43,8 +43,13 @@ export function LogSheetRenderer({ logSheets }: LogSheetRendererProps) {
             </div>
           </header>
 
-          <div className="overflow-x-auto rounded-[1.3rem] border border-white/8 bg-[#15100c] p-4">
-            <div className="min-w-[760px]">
+          <div className="rounded-[1.4rem] border border-white/8 bg-[#120d09] p-3 sm:p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-500">Duty status graph</p>
+              <p className="text-xs text-stone-400">Scroll horizontally on smaller screens</p>
+            </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[680px]">
               <div className="mb-2 grid grid-cols-[11rem_1fr] gap-4">
                 <div />
                 <div className="grid grid-cols-24 text-[10px] font-semibold uppercase tracking-[0.18em] text-stone-500">
@@ -107,9 +112,10 @@ export function LogSheetRenderer({ logSheets }: LogSheetRendererProps) {
                 </svg>
               </div>
             </div>
+            </div>
           </div>
 
-          <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+          <div className="grid gap-4 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
               {STATUS_ORDER.map((status) => (
                 <Metric
@@ -127,15 +133,15 @@ export function LogSheetRenderer({ logSheets }: LogSheetRendererProps) {
                   {logSheet.remarks.slice(0, 8).map((remark) => (
                     <li
                       key={`${remark.time}-${remark.label}`}
-                      className="flex items-center justify-between gap-3 rounded-xl border border-white/6 bg-white/[0.03] px-3 py-2 text-sm text-stone-200"
+                      className="flex flex-col gap-2 rounded-xl border border-white/6 bg-white/[0.03] px-3 py-3 text-sm text-stone-200 sm:flex-row sm:items-start sm:justify-between"
                     >
                       <div className="min-w-0">
                         <p className="truncate font-medium text-stone-100">{remark.label}</p>
-                        <p className="truncate text-xs uppercase tracking-[0.18em] text-stone-500">{remark.status}</p>
+                        <p className="break-all text-xs uppercase tracking-[0.18em] text-stone-500">{remark.status}</p>
                       </div>
-                      <div className="text-right text-xs text-stone-400">
+                      <div className="text-xs text-stone-400 sm:text-right">
                         <p>{formatRemarkTime(remark.time)}</p>
-                        <p>{remark.location || "In transit"}</p>
+                        <p className="break-words">{remark.location || "In transit"}</p>
                       </div>
                     </li>
                   ))}
@@ -195,7 +201,12 @@ function hourToX(hour: number): number {
 
 /** Format remark timestamps for compact display beside the log sheet. */
 function formatRemarkTime(value: string): string {
-  return new Date(value).toLocaleTimeString([], {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value || "Time unavailable";
+  }
+
+  return date.toLocaleTimeString([], {
     hour: "2-digit",
     minute: "2-digit",
   });
