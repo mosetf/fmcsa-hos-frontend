@@ -269,7 +269,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
         );
       })}
 
-      <rect x={PAGE_PAD} y={GRID_Y + HEADER_H} width={SVG_W - PAGE_PAD * 2} height={GRID_BODY_H} fill="#fff" stroke="#050505" strokeWidth={1.6} />
+      <rect x={PAGE_PAD} y={GRID_Y + HEADER_H} width={SVG_W - PAGE_PAD * 2} height={GRID_BODY_H} fill="#fff" stroke="#050505" strokeWidth={1.7} />
       <line x1={GRID_X} y1={GRID_Y} x2={GRID_X} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.7} />
       <line x1={GRID_X + GRID_W} y1={GRID_Y} x2={GRID_X + GRID_W} y2={GRID_Y + GRID_TOTAL_H} stroke="#050505" strokeWidth={1.7} />
 
@@ -287,7 +287,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
                 </tspan>
               ))}
             </text>
-            <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#64748B" strokeWidth={0.9} />
+            <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#475569" strokeWidth={0.95} />
             <text x={GRID_X + GRID_W + TOTAL_W / 2} y={centerY + 4} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={13} fill="#050505">
               {total > 0 ? total.toFixed(2) : ""}
             </text>
@@ -307,9 +307,9 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
             y1={GRID_Y + HEADER_H}
             x2={x}
             y2={GRID_Y + HEADER_H + GRID_BODY_H}
-            stroke={hour ? "#334155" : "#94A3B8"}
-            strokeWidth={hour ? 1.15 : 0.65}
-            opacity={hour ? 1 : 0.78}
+            stroke={hour ? "#1F2937" : "#7C8A9E"}
+            strokeWidth={hour ? 1.25 : 0.72}
+            opacity={hour ? 1 : 0.86}
             strokeDasharray={hour ? undefined : half ? "2 4" : "1 5"}
           />
         );
@@ -333,6 +333,16 @@ function ContinuousTrace({ sheet }: { sheet: LogSheet }) {
         return (
           <g key={`${segment.status}-${segment.start_hour}-${index}`}>
             <line x1={x1} y1={y} x2={x2} y2={y} stroke={LOG_TRACE_COLOR} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
+            {isShortBreak(segment) ? (
+              <circle
+                cx={(x1 + x2) / 2}
+                cy={y}
+                r={6.2}
+                fill={LOG_TRACE_COLOR}
+                stroke="#ffffff"
+                strokeWidth={2}
+              />
+            ) : null}
             {next ? (
               <line
                 x1={x2}
@@ -350,6 +360,10 @@ function ContinuousTrace({ sheet }: { sheet: LogSheet }) {
       })}
     </g>
   );
+}
+
+function isShortBreak(segment: TraceSegment): boolean {
+  return segment.status === "OFF_DUTY" && segment.end_hour - segment.start_hour <= 0.6;
 }
 
 function Remarks({ sheet, logMeta }: { sheet: LogSheet; logMeta: LogSheetMeta }) {

@@ -137,6 +137,24 @@ function countByLabel(segs: TripSegment[], label: string): number {
   return segs.filter((s) => s.label === label).length;
 }
 
+function totalLogHours(logs: PlanTripResponse["log_sheets"], statuses: string[]): string {
+  const total = logs.reduce((sum, sheet) => (
+    sum + statuses.reduce((sheetSum, status) => sheetSum + (sheet.totals[status] || 0), 0)
+  ), 0);
+  return `${total.toFixed(1)} hr`;
+}
+
+function waypointDisplayName(
+  type: string,
+  route: NonNullable<PlanTripResponse["route"]>,
+  fallback: string
+): string {
+  if (type === "current") return route.legs[0]?.from || fallback;
+  if (type === "pickup") return route.legs[0]?.to || fallback;
+  if (type === "dropoff") return route.legs.at(-1)?.to || fallback;
+  return fallback;
+}
+
 // ─── Main shell ───────────────────────────────────────────────────────────────
 
 const INITIAL_LOG_META: LogMeta = {
@@ -741,16 +759,20 @@ export function TripPlannerShell() {
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "repeat(6, 1fr)",
-                  borderBottom: "1px solid var(--border-mid)",
+                  gridTemplateColumns: "repeat(8, minmax(112px, 1fr))",
+                  borderBottom: "2px solid rgba(15, 23, 42, 0.12)",
                   background: "var(--surface-1)",
                   flexShrink: 0,
+                  boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset",
+                  overflowX: "auto",
                 }}
               >
                 {[
                   { label: "Distance",     value: `${route!.total_distance_miles.toFixed(1)} mi` },
                   { label: "Drive Time",   value: `${route!.total_duration_hours.toFixed(1)} hr` },
                   { label: "Trip Window",  value: totalTripWindow(segs) },
+                  { label: "On Duty",      value: totalLogHours(logs, ["DRIVING", "ON_DUTY_NOT_DRIVING"]) },
+                  { label: "Off Duty",     value: totalLogHours(logs, ["OFF_DUTY", "SLEEPER_BERTH"]) },
                   { label: "Segments",     value: `${segs.length}` },
                   { label: "Break Stops",  value: `${countByLabel(segs, "30-min break")}` },
                   { label: "Fuel Stops",   value: `${countByLabel(segs, "Fuel stop")}` },
@@ -793,10 +815,12 @@ export function TripPlannerShell() {
               <div
                 style={{
                   display: "flex",
-                  borderBottom: "1px solid var(--border-mid)",
+                  borderTop: "1px solid rgba(15, 23, 42, 0.08)",
+                  borderBottom: "2px solid rgba(15, 23, 42, 0.14)",
                   background: "var(--surface-1)",
                   flexShrink: 0,
                   overflowX: "auto",
+                  paddingTop: "4px",
                 }}
               >
                 {(
@@ -813,14 +837,14 @@ export function TripPlannerShell() {
                     style={{
                       fontFamily: "var(--font-display)",
                       fontSize: "12px",
-                      fontWeight: 600,
+                      fontWeight: activeTab === id ? 800 : 600,
                       letterSpacing: "0.1em",
                       textTransform: "uppercase",
                       padding: "11px 18px",
                       background: "transparent",
                       border: "none",
-                      borderBottom: activeTab === id ? "2px solid var(--green)" : "2px solid transparent",
-                      color: activeTab === id ? "var(--green)" : "var(--text-muted)",
+                      borderBottom: activeTab === id ? "4px solid var(--green)" : "4px solid transparent",
+                      color: activeTab === id ? "var(--ink)" : "var(--text-muted)",
                       cursor: "pointer",
                       display: "flex",
                       alignItems: "center",
@@ -851,7 +875,7 @@ export function TripPlannerShell() {
               </div>
 
               {/* ── Tab content ── */}
-              <div style={{ flex: 1, overflow: "auto" }}>
+              <div style={{ flex: 1, overflow: "auto", borderTop: "1px solid rgba(255,255,255,0.75)" }}>
 
                 {/* MAP */}
                 {activeTab === "map" && (
@@ -1051,7 +1075,7 @@ export function TripPlannerShell() {
                                   marginBottom: "3px",
                                 }}
                               >
-                                {wp.label}
+                                {waypointDisplayName(wp.type, route!, wp.label)}
                               </div>
                               <div
                                 style={{
@@ -1062,14 +1086,14 @@ export function TripPlannerShell() {
                                   textTransform: "uppercase",
                                 }}
                               >
-                                {wp.type}
+                                {wp.label} · {wp.type}
                               </div>
                             </div>
                             <div style={{ textAlign: "right" }}>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-dim)" }}>
                                 {wp.lat.toFixed(4)}°N
                               </div>
-                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "11px", color: "var(--text-muted)" }}>
+                              <div style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-dim)" }}>
                                 {Math.abs(wp.lng).toFixed(4)}°W
                               </div>
                             </div>
