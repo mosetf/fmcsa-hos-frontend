@@ -14,10 +14,10 @@ type Status = (typeof STATUS_ORDER)[number];
 const LOG_TRACE_COLOR = "#2563EB";
 
 const STATUS_CONFIG: Record<Status, { label: string; shortLabel: string }> = {
-  OFF_DUTY: { label: "1. Off Duty", shortLabel: "Off duty" },
-  SLEEPER_BERTH: { label: "2. Sleeper Berth", shortLabel: "Sleeper" },
-  DRIVING: { label: "3. Driving", shortLabel: "Driving" },
-  ON_DUTY_NOT_DRIVING: { label: "4. On Duty\n(not driving)", shortLabel: "On duty" },
+  OFF_DUTY: { label: "Off Duty", shortLabel: "Off duty" },
+  SLEEPER_BERTH: { label: "Sleeper\nBerth", shortLabel: "Sleeper" },
+  DRIVING: { label: "Driving", shortLabel: "Driving" },
+  ON_DUTY_NOT_DRIVING: { label: "On Duty\n(not driving)", shortLabel: "On duty" },
 };
 
 const HOUR_LABELS = [
@@ -60,6 +60,7 @@ const HEADER_H = 34;
 const ROW_H = 39;
 const GRID_BODY_H = ROW_H * STATUS_ORDER.length;
 const GRID_TOTAL_H = HEADER_H + GRID_BODY_H;
+const GRID_END_Y = GRID_Y + GRID_TOTAL_H;
 const HOUR_W = GRID_W / 24;
 
 export type LogSheetMeta = {
@@ -234,12 +235,6 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
   return (
     <g>
       <rect x={PAGE_PAD} y={GRID_Y} width={SVG_W - PAGE_PAD * 2} height={HEADER_H} fill="#050505" />
-      <text x={PAGE_PAD + 12} y={GRID_Y + 13} fontFamily="Arial, sans-serif" fontSize={9} fill="#fff">
-        Mid-
-      </text>
-      <text x={PAGE_PAD + 12} y={GRID_Y + 25} fontFamily="Arial, sans-serif" fontSize={9} fill="#fff">
-        night
-      </text>
       <text x={SVG_W - PAGE_PAD - 44} y={GRID_Y + 13} fontFamily="Arial, sans-serif" fontSize={9} fill="#fff">
         Total
       </text>
@@ -248,13 +243,14 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
       </text>
 
       {HOUR_LABELS.map((label, index) => {
-        const x = index === 24 ? GRID_X + GRID_W : GRID_X + index * HOUR_W + HOUR_W / 2;
+        const x = index === 0 ? GRID_X + 4 : index === 24 ? GRID_X + GRID_W - 4 : GRID_X + index * HOUR_W + HOUR_W / 2;
+        const anchor = index === 0 ? "start" : index === 24 ? "end" : "middle";
         return (
           <text
             key={`${label}-${index}`}
             x={x}
             y={GRID_Y + (label.includes("\n") ? 12 : 22)}
-            textAnchor="middle"
+            textAnchor={anchor}
             fontFamily="Arial, sans-serif"
             fontSize={index === 0 || index === 12 || index === 24 ? 8 : 10}
             fontWeight={index === 12 ? 700 : 400}
@@ -280,9 +276,9 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
         return (
           <g key={status}>
             <line x1={PAGE_PAD} y1={y} x2={SVG_W - PAGE_PAD} y2={y} stroke="#111827" strokeWidth={1.1} />
-            <text x={PAGE_PAD + 9} y={centerY - (status === "ON_DUTY_NOT_DRIVING" ? 7 : 3)} fontFamily="Arial, sans-serif" fontSize={status === "ON_DUTY_NOT_DRIVING" ? 10 : 12} fontWeight={700} fill="#050505">
+            <text x={PAGE_PAD + 9} y={centerY - (STATUS_CONFIG[status].label.includes("\n") ? 7 : 2)} fontFamily="Arial, sans-serif" fontSize={STATUS_CONFIG[status].label.includes("\n") ? 9.5 : 10.5} fontWeight={700} fill="#050505">
               {STATUS_CONFIG[status].label.split("\n").map((line, lineIndex) => (
-                <tspan key={line} x={PAGE_PAD + 9} dy={lineIndex === 0 ? 0 : 12}>
+                <tspan key={line} x={PAGE_PAD + 9} dy={lineIndex === 0 ? 0 : 11}>
                   {line}
                 </tspan>
               ))}
@@ -367,10 +363,10 @@ function isShortBreak(segment: TraceSegment): boolean {
 }
 
 function Remarks({ sheet, logMeta }: { sheet: LogSheet; logMeta: LogSheetMeta }) {
-  const baseY = 430;
+  const baseY = 462;
   return (
     <g>
-      <text x={PAGE_PAD} y={baseY} fontFamily="Arial, sans-serif" fontSize={16} fontWeight={700} fill="#050505">
+      <text x={PAGE_PAD} y={GRID_END_Y + 34} fontFamily="Arial, sans-serif" fontSize={13} fontWeight={700} fill="#050505">
         Remarks
       </text>
       <rect x={PAGE_PAD} y={baseY + 16} width={SVG_W - PAGE_PAD * 2} height={150} fill="#fff" stroke="#050505" strokeWidth={2} />
@@ -420,7 +416,7 @@ function Remarks({ sheet, logMeta }: { sheet: LogSheet; logMeta: LogSheetMeta })
 }
 
 function Recap({ totalMiles, recapHoursLeft }: { totalMiles: number; recapHoursLeft: number }) {
-  const y = 642;
+  const y = 674;
   return (
     <g>
       <line x1={PAGE_PAD} y1={y - 16} x2={SVG_W - PAGE_PAD} y2={y - 16} stroke="#050505" strokeWidth={2} />

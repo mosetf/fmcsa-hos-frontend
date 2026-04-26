@@ -1112,31 +1112,6 @@ export function TripPlannerShell() {
                       desc="FMCSA-compliant 24-hour log sheets for each day of the trip"
                     />
 
-                    {/* Legend */}
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "12px",
-                        flexWrap: "wrap",
-                        marginTop: "12px",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      {[
-                        { status: "OFF_DUTY",            color: "#475569", label: "Off Duty" },
-                        { status: "SLEEPER_BERTH",       color: "#2563EB", label: "Sleeper Berth" },
-                        { status: "DRIVING",             color: "#D97706", label: "Driving" },
-                        { status: "ON_DUTY_NOT_DRIVING", color: "#047857", label: "On Duty (Not Driving)" },
-                      ].map(({ color, label }) => (
-                        <div key={label} style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <div style={{ width: "12px", height: "12px", borderRadius: "2px", background: color }} />
-                          <span style={{ fontFamily: "var(--font-mono)", fontSize: "10px", color: "var(--text-secondary)", letterSpacing: "0.06em" }}>
-                            {label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-
                     <LogSheetRenderer
                       logSheets={logs}
                       logMeta={logDetails}
