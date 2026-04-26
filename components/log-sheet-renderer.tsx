@@ -11,11 +11,13 @@ const STATUS_ORDER = [
 
 type Status = (typeof STATUS_ORDER)[number];
 
-const STATUS_CONFIG: Record<Status, { label: string; shortLabel: string; color: string }> = {
-  OFF_DUTY: { label: "1. Off Duty", shortLabel: "Off duty", color: "#2563EB" },
-  SLEEPER_BERTH: { label: "2. Sleeper Berth", shortLabel: "Sleeper", color: "#7C3AED" },
-  DRIVING: { label: "3. Driving", shortLabel: "Driving", color: "#EA580C" },
-  ON_DUTY_NOT_DRIVING: { label: "4. On Duty (not driving)", shortLabel: "On duty", color: "#047857" },
+const LOG_TRACE_COLOR = "#2563EB";
+
+const STATUS_CONFIG: Record<Status, { label: string; shortLabel: string }> = {
+  OFF_DUTY: { label: "1. Off Duty", shortLabel: "Off duty" },
+  SLEEPER_BERTH: { label: "2. Sleeper Berth", shortLabel: "Sleeper" },
+  DRIVING: { label: "3. Driving", shortLabel: "Driving" },
+  ON_DUTY_NOT_DRIVING: { label: "4. On Duty\n(not driving)", shortLabel: "On duty" },
 };
 
 const HOUR_LABELS = [
@@ -278,8 +280,12 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
         return (
           <g key={status}>
             <line x1={PAGE_PAD} y1={y} x2={SVG_W - PAGE_PAD} y2={y} stroke="#1F2937" strokeWidth={0.9} />
-            <text x={PAGE_PAD + 10} y={centerY - 3} fontFamily="Arial, sans-serif" fontSize={12} fontWeight={700} fill="#050505">
-              {STATUS_CONFIG[status].label}
+            <text x={PAGE_PAD + 9} y={centerY - (status === "ON_DUTY_NOT_DRIVING" ? 7 : 3)} fontFamily="Arial, sans-serif" fontSize={status === "ON_DUTY_NOT_DRIVING" ? 10 : 12} fontWeight={700} fill="#050505">
+              {STATUS_CONFIG[status].label.split("\n").map((line, lineIndex) => (
+                <tspan key={line} x={PAGE_PAD + 9} dy={lineIndex === 0 ? 0 : 12}>
+                  {line}
+                </tspan>
+              ))}
             </text>
             <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#94A3B8" strokeWidth={0.8} />
             <text x={GRID_X + GRID_W + TOTAL_W / 2} y={centerY + 4} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={13} fill="#050505">
@@ -324,20 +330,19 @@ function ContinuousTrace({ sheet }: { sheet: LogSheet }) {
         const x2 = hourToX(segment.end_hour);
         const y = statusCenterY(segment.status);
         const next = trace[index + 1];
-        const color = STATUS_CONFIG[segment.status].color;
-
         return (
           <g key={`${segment.status}-${segment.start_hour}-${index}`}>
-            <line x1={x1} y1={y} x2={x2} y2={y} stroke={color} strokeWidth={5.5} strokeLinecap="butt" />
+            <line x1={x1} y1={y} x2={x2} y2={y} stroke={LOG_TRACE_COLOR} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
             {next ? (
               <line
                 x1={x2}
                 y1={y}
                 x2={hourToX(next.start_hour)}
                 y2={statusCenterY(next.status)}
-                stroke={STATUS_CONFIG[next.status].color}
-                strokeWidth={3.5}
-                strokeLinecap="square"
+                stroke={LOG_TRACE_COLOR}
+                strokeWidth={5.5}
+                strokeLinecap="round"
+                strokeLinejoin="round"
               />
             ) : null}
           </g>

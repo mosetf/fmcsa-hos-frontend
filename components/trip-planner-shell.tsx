@@ -389,30 +389,30 @@ export function TripPlannerShell() {
               <FormField
                 id="current_location"
                 label="Current Location"
-                placeholder="Enter any city, address, or terminal"
+                placeholder="Chicago, IL or Nairobi, Kenya"
                 value={form.current_location}
                 onChange={(v) => field("current_location", v)}
-                hint="Your starting position"
+                hint="Recommended pattern: City, State/Region, Country for best routing reliability."
                 icon={<LocateFixed size={13} />}
                 iconColor="var(--gold)"
               />
               <FormField
                 id="pickup_location"
                 label="Pickup Location"
-                placeholder="Enter pickup city or address"
+                placeholder="Austin, TX or Mombasa, Kenya"
                 value={form.pickup_location}
                 onChange={(v) => field("pickup_location", v)}
-                hint="Where you collect the load"
+                hint="Free text is allowed; include state/region to avoid ambiguous geocoding."
                 icon={<PackageCheck size={13} />}
                 iconColor="var(--green)"
               />
               <FormField
                 id="dropoff_location"
                 label="Dropoff Location"
-                placeholder="Enter dropoff city or address"
+                placeholder="Springfield, IL or Kisumu, Kenya"
                 value={form.dropoff_location}
                 onChange={(v) => field("dropoff_location", v)}
-                hint="Final delivery point"
+                hint="Avoid ambiguous names like Springfield; use Springfield, IL."
                 icon={<MapPin size={13} />}
                 iconColor="var(--red)"
               />
