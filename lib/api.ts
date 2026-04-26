@@ -64,13 +64,13 @@ export type PlanTripResponse = {
   log_sheets: LogSheet[];
 };
 
-/** Return the normalized API base URL used by the frontend planner calls. */
+/** Return the normalized backend base URL used by the planner UI. */
 export function getApiBaseUrl(): string {
   const fallback = "http://127.0.0.1:8000";
   return (process.env.NEXT_PUBLIC_API_BASE_URL || fallback).replace(/\/$/, "");
 }
 
-/** Build the versioned plan-trip URL for the requested response detail level. */
+/** Build the plan-trip URL for the requested response detail level. */
 export function buildPlanTripUrl(detail: "compact" | "full"): string {
   const url = new URL("/api/v1/plan-trip/", getApiBaseUrl());
   url.searchParams.set("detail", detail);
