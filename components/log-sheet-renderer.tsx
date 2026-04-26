@@ -235,16 +235,16 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
   return (
     <g>
       <rect x={PAGE_PAD} y={GRID_Y} width={SVG_W - PAGE_PAD * 2} height={HEADER_H} fill="#050505" />
-      <text x={SVG_W - PAGE_PAD - 44} y={GRID_Y + 13} fontFamily="Arial, sans-serif" fontSize={9} fill="#fff">
+      <text x={SVG_W - PAGE_PAD - 22} y={GRID_Y + 13} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={8} fill="#fff">
         Total
       </text>
-      <text x={SVG_W - PAGE_PAD - 44} y={GRID_Y + 25} fontFamily="Arial, sans-serif" fontSize={9} fill="#fff">
+      <text x={SVG_W - PAGE_PAD - 22} y={GRID_Y + 25} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={8} fill="#fff">
         Hours
       </text>
 
       {HOUR_LABELS.map((label, index) => {
-        const x = index === 0 ? GRID_X + 4 : index === 24 ? GRID_X + GRID_W - 4 : GRID_X + index * HOUR_W + HOUR_W / 2;
-        const anchor = index === 0 ? "start" : index === 24 ? "end" : "middle";
+        const x = index === 0 ? GRID_X + 4 : index === 24 ? GRID_X + GRID_W + 4 : GRID_X + index * HOUR_W + HOUR_W / 2;
+        const anchor = index === 0 || index === 24 ? "start" : "middle";
         return (
           <text
             key={`${label}-${index}`}
@@ -252,7 +252,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
             y={GRID_Y + (label.includes("\n") ? 12 : 22)}
             textAnchor={anchor}
             fontFamily="Arial, sans-serif"
-            fontSize={index === 0 || index === 12 || index === 24 ? 8 : 10}
+            fontSize={index === 0 || index === 12 || index === 24 ? 7 : 10}
             fontWeight={index === 12 ? 700 : 400}
             fill="#fff"
           >
@@ -285,7 +285,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
             </text>
             <line x1={GRID_X} y1={centerY} x2={GRID_X + GRID_W} y2={centerY} stroke="#475569" strokeWidth={0.95} />
             <text x={GRID_X + GRID_W + TOTAL_W / 2} y={centerY + 4} textAnchor="middle" fontFamily="Arial, sans-serif" fontSize={13} fill="#050505">
-              {total > 0 ? total.toFixed(2) : ""}
+              {total.toFixed(2).padStart(5, "0")}
             </text>
           </g>
         );

@@ -107,7 +107,7 @@ function errorMessage(payload: unknown): string {
   if (!payload || typeof payload !== "object") return "Request failed.";
   const e = (payload as { error?: { code?: unknown; message?: unknown } }).error;
   if (e?.code === "GEOCODING_FAILED") {
-    return "We could not find one of those locations. Try using a more specific format like 'Chicago, IL, USA' or 'Nairobi, Kenya'.";
+    return "We could not find one of those locations. Try using a more specific format like 'Chicago, IL, USA' or 'Austin, TX, USA'.";
   }
   if (e?.code === "ROUTING_FAILED") {
     return "We found the locations, but could not build a truck route between them. Check spelling, add country/state, or choose a nearby city or terminal.";
@@ -413,7 +413,7 @@ export function TripPlannerShell() {
               <FormField
                 id="current_location"
                 label="Current Location"
-                placeholder="Chicago, IL or Nairobi, Kenya"
+                placeholder="Chicago, IL or Dallas, TX"
                 value={form.current_location}
                 onChange={(v) => field("current_location", v)}
                 hint="Recommended pattern: City, State/Region, Country for best routing reliability."
@@ -423,7 +423,7 @@ export function TripPlannerShell() {
               <FormField
                 id="pickup_location"
                 label="Pickup Location"
-                placeholder="Austin, TX or Mombasa, Kenya"
+                placeholder="Austin, TX or Denver, CO"
                 value={form.pickup_location}
                 onChange={(v) => field("pickup_location", v)}
                 hint="Free text is allowed; include state/region to avoid ambiguous geocoding."
@@ -433,7 +433,7 @@ export function TripPlannerShell() {
               <FormField
                 id="dropoff_location"
                 label="Dropoff Location"
-                placeholder="Springfield, IL or Kisumu, Kenya"
+                placeholder="Springfield, IL or Nashville, TN"
                 value={form.dropoff_location}
                 onChange={(v) => field("dropoff_location", v)}
                 hint="Avoid ambiguous names like Springfield; use Springfield, IL."
