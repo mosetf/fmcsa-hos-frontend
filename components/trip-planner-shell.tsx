@@ -137,11 +137,16 @@ function countByLabel(segs: TripSegment[], label: string): number {
   return segs.filter((s) => s.label === label).length;
 }
 
-function totalLogHours(logs: PlanTripResponse["log_sheets"], statuses: string[]): string {
-  const total = logs.reduce((sum, sheet) => (
-    sum + statuses.reduce((sheetSum, status) => sheetSum + (sheet.totals[status] || 0), 0)
-  ), 0);
+function totalDrivingHours(segs: TripSegment[]): string {
+  const total = segs
+    .filter((seg) => seg.type === "DRIVING")
+    .reduce((sum, seg) => sum + ((new Date(seg.end).getTime() - new Date(seg.start).getTime()) / 3600000), 0);
   return `${total.toFixed(1)} hr`;
+}
+
+function countStopsByPhrase(segs: TripSegment[], phrase: string): number {
+  const needle = phrase.toLowerCase();
+  return segs.filter((seg) => seg.label.toLowerCase().includes(needle)).length;
 }
 
 function waypointDisplayName(
@@ -755,60 +760,59 @@ export function TripPlannerShell() {
             </div>
           ) : (
             <>
-              {/* ── Stats strip ── */}
+              {/* ── Summary strip ── */}
               <div
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(8, minmax(112px, 1fr))",
-                  borderBottom: "2px solid rgba(15, 23, 42, 0.12)",
-                  background: "var(--surface-1)",
-                  flexShrink: 0,
-                  boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset",
-                  overflowX: "auto",
+                  padding: "12px 16px",
+                  borderBottom: "1px solid rgba(15, 23, 42, 0.12)",
+                  background: "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(247,250,252,0.96))",
                 }}
               >
-                {[
-                  { label: "Distance",     value: `${route!.total_distance_miles.toFixed(1)} mi` },
-                  { label: "Drive Time",   value: `${route!.total_duration_hours.toFixed(1)} hr` },
-                  { label: "Trip Window",  value: totalTripWindow(segs) },
-                  { label: "On Duty",      value: totalLogHours(logs, ["DRIVING", "ON_DUTY_NOT_DRIVING"]) },
-                  { label: "Off Duty",     value: totalLogHours(logs, ["OFF_DUTY", "SLEEPER_BERTH"]) },
-                  { label: "Segments",     value: `${segs.length}` },
-                  { label: "Break Stops",  value: `${countByLabel(segs, "30-min break")}` },
-                  { label: "Fuel Stops",   value: `${countByLabel(segs, "Fuel stop")}` },
-                ].map(({ label, value }) => (
-                  <div
-                    key={label}
-                    style={{
-                      padding: "10px 14px",
-                      borderRight: "1px solid var(--border)",
-                    }}
-                  >
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(0, 1fr))", gap: "10px" }}>
+                  {[
+                    { label: "Total Distance", value: `${route!.total_distance_miles.toFixed(1)} mi` },
+                    { label: "Trip Duration", value: totalTripWindow(segs) },
+                    { label: "Driving Hours", value: totalDrivingHours(segs) },
+                    { label: "Rest Stops", value: `${countStopsByPhrase(segs, "break") + countStopsByPhrase(segs, "reset")}` },
+                    { label: "Fuel Stops", value: `${countByLabel(segs, "Fuel stop")}` },
+                    { label: "Log Sheets", value: `${logs.length}` },
+                  ].map(({ label, value }) => (
                     <div
+                      key={label}
                       style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "8px",
-                        color: "var(--text-muted)",
-                        letterSpacing: "0.12em",
-                        textTransform: "uppercase",
-                        marginBottom: "3px",
+                        background: "var(--surface-1)",
+                        border: "1px solid var(--border-mid)",
+                        borderRadius: "8px",
+                        padding: "10px 12px",
+                        boxShadow: "0 1px 0 rgba(255,255,255,0.8) inset",
                       }}
                     >
-                      {label}
+                      <div
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "8px",
+                          color: "var(--text-muted)",
+                          letterSpacing: "0.14em",
+                          textTransform: "uppercase",
+                          marginBottom: "3px",
+                        }}
+                      >
+                        {label}
+                      </div>
+                      <div
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          fontSize: "18px",
+                          fontWeight: 800,
+                          color: "var(--ink)",
+                          lineHeight: 1,
+                        }}
+                      >
+                        {value}
+                      </div>
                     </div>
-                    <div
-                      style={{
-                        fontFamily: "var(--font-mono)",
-                        fontSize: "15px",
-                        fontWeight: 500,
-                        color: "var(--text-primary)",
-                        letterSpacing: "0.02em",
-                      }}
-                    >
-                      {value}
-                    </div>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
 
               {/* ── Tab bar ── */}
