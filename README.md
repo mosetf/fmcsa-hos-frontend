@@ -1,14 +1,38 @@
 # FMCSA HOS Frontend
 
-Next.js frontend for trip input, backend submission, route review, and FMCSA log presentation.
+This repository contains the Next.js frontend for the FMCSA Hours of Service trip planner.
+It collects trip inputs, calls the backend API, renders the route map, and presents the FMCSA-style log sheets and summary views.
 
-## Current Scope
+## What This Frontend Does
 
-The app currently provides:
-- trip request form for current location, pickup, dropoff, cycle hours used, and departure time
-- inline backend error handling and visible loading state
-- decoded route map rendering from the compact planner response
-- operational summary cards, duty-status sequence review, and daily log snapshot
+- collects trip planning inputs from the user
+- submits requests to the backend planner API
+- displays loading and error states inline
+- renders the route map, waypoints, and trip summary metrics
+- shows the duty-status sequence and generated daily log sheets
+- presents a paper-style log view that mirrors the FMCSA reference
+
+## Technology Stack
+
+- Next.js
+- React
+- TypeScript
+- Leaflet / React Leaflet for map rendering
+- lucide-react for icons
+
+## Backend Integration
+
+The frontend sends trip requests to the backend through:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL
+```
+
+Example:
+
+```bash
+NEXT_PUBLIC_API_BASE_URL=https://your-backend.onrender.com
+```
 
 ## Environment
 
@@ -18,7 +42,7 @@ Create `.env.local` from `.env.example`.
 cp .env.example .env.local
 ```
 
-Expected variable:
+Required variable:
 
 ```bash
 NEXT_PUBLIC_API_BASE_URL=http://127.0.0.1:8000
@@ -37,3 +61,9 @@ Run the app:
 ```bash
 npm run dev
 ```
+
+## Deployment Notes
+
+- Deploy the frontend on Vercel
+- Set `NEXT_PUBLIC_API_BASE_URL` to the deployed backend URL
+- Ensure the backend CORS allowlist includes the Vercel origin
