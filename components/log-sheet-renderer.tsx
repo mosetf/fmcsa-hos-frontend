@@ -329,16 +329,6 @@ function ContinuousTrace({ sheet }: { sheet: LogSheet }) {
         return (
           <g key={`${segment.status}-${segment.start_hour}-${index}`}>
             <line x1={x1} y1={y} x2={x2} y2={y} stroke={LOG_TRACE_COLOR} strokeWidth={5.5} strokeLinecap="round" strokeLinejoin="round" />
-            {isShortBreak(segment) ? (
-              <circle
-                cx={(x1 + x2) / 2}
-                cy={y}
-                r={6.2}
-                fill={LOG_TRACE_COLOR}
-                stroke="#ffffff"
-                strokeWidth={2}
-              />
-            ) : null}
             {next ? (
               <line
                 x1={x2}
@@ -356,10 +346,6 @@ function ContinuousTrace({ sheet }: { sheet: LogSheet }) {
       })}
     </g>
   );
-}
-
-function isShortBreak(segment: TraceSegment): boolean {
-  return segment.status === "OFF_DUTY" && segment.end_hour - segment.start_hour <= 0.6;
 }
 
 function Remarks({ sheet, logMeta }: { sheet: LogSheet; logMeta: LogSheetMeta }) {
