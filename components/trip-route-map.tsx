@@ -28,7 +28,7 @@ export function TripRouteMap({ polylineEncoded, waypoints, tripSegments }: TripR
 
   if (polyline.length === 0) {
     return (
-      <div className="flex min-h-[20rem] items-center justify-center rounded-md border border-dashed border-slate-300 bg-white px-6 py-10 text-sm text-slate-500">
+      <div className="flex min-h-[20rem] items-center justify-center rounded-md border border-dashed border-slate-300 bg-white px-6 py-10 text-sm text-slate-700">
         Route geometry is unavailable for this trip.
       </div>
     );
@@ -67,7 +67,7 @@ export function TripRouteMap({ polylineEncoded, waypoints, tripSegments }: TripR
             <Popup>
               <div className="space-y-1">
                 <p className="text-sm font-semibold">{marker.label}</p>
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-700">
                   {marker.type === "fuel" ? "Fuel stop" : "Rest break"}
                 </p>
               </div>
@@ -92,7 +92,7 @@ export function TripRouteMap({ polylineEncoded, waypoints, tripSegments }: TripR
             <Popup>
               <div className="space-y-1">
                 <p className="text-sm font-semibold">{waypoint.label}</p>
-                <p className="text-xs uppercase tracking-[0.18em] text-stone-500">{waypoint.type}</p>
+                <p className="text-xs uppercase tracking-[0.18em] text-stone-700">{waypoint.type}</p>
               </div>
             </Popup>
           </CircleMarker>

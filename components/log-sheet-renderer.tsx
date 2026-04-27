@@ -305,7 +305,7 @@ function DutyGrid({ sheet, totals }: { sheet: LogSheet; totals: Record<string, n
             y2={GRID_Y + HEADER_H + GRID_BODY_H}
             stroke={hour ? "#1F2937" : "#7C8A9E"}
             strokeWidth={hour ? 1.25 : 0.72}
-            opacity={hour ? 1 : 0.86}
+            opacity={hour ? 1 : 0.94}
             strokeDasharray={hour ? undefined : half ? "2 4" : "1 5"}
           />
         );

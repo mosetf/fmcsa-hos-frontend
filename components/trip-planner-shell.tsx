@@ -418,30 +418,30 @@ export function TripPlannerShell() {
               <FormField
                 id="current_location"
                 label="Current Location"
-                placeholder="Chicago, IL or Dallas, TX"
+                placeholder="Chicago, IL"
                 value={form.current_location}
                 onChange={(v) => field("current_location", v)}
-                hint="Recommended pattern: City, State/Region, Country for best routing reliability."
+                hint="Example: Chicago, IL"
                 icon={<LocateFixed size={13} />}
                 iconColor="var(--gold)"
               />
               <FormField
                 id="pickup_location"
                 label="Pickup Location"
-                placeholder="Austin, TX or Denver, CO"
+                placeholder="Indianapolis, IN"
                 value={form.pickup_location}
                 onChange={(v) => field("pickup_location", v)}
-                hint="Free text is allowed; include state/region to avoid ambiguous geocoding."
+                hint="Example: Dallas, TX"
                 icon={<PackageCheck size={13} />}
                 iconColor="var(--green)"
               />
               <FormField
                 id="dropoff_location"
                 label="Dropoff Location"
-                placeholder="Springfield, IL or Nashville, TN"
+                placeholder="Nashville, TN"
                 value={form.dropoff_location}
                 onChange={(v) => field("dropoff_location", v)}
-                hint="Avoid ambiguous names like Springfield; use Springfield, IL."
+                hint="Example: Springfield, IL"
                 icon={<MapPin size={13} />}
                 iconColor="var(--red)"
               />
@@ -452,7 +452,7 @@ export function TripPlannerShell() {
               <FormField
                 id="cycle_used_hours"
                 label="Cycle Hours Used"
-                placeholder="0"
+                placeholder="0.0"
                 value={form.cycle_used_hours}
                 onChange={(v) => field("cycle_used_hours", v)}
                 type="number"
@@ -1170,10 +1170,11 @@ function FormField({
       <label
         htmlFor={id}
         style={{
-          fontFamily: "var(--font-mono)",
-          fontSize: "10px",
-          color: "var(--text-secondary)",
-          letterSpacing: "0.1em",
+          fontFamily: "var(--font-display)",
+          fontSize: "11px",
+          fontWeight: 700,
+          color: "var(--text-primary)",
+          letterSpacing: "0.06em",
           textTransform: "uppercase",
           display: "flex",
           alignItems: "center",
@@ -1202,8 +1203,8 @@ function FormField({
         <div
           style={{
             fontFamily: "var(--font-mono)",
-            fontSize: "9px",
-            color: "var(--text-dim)",
+            fontSize: "10px",
+            color: "var(--text-muted)",
             letterSpacing: "0.06em",
           }}
         >

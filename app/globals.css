@@ -19,11 +19,11 @@
 
   /* Typography */
   --text-primary:   #0F172A;
-  --text-secondary: #334155;
-  --text-muted:     #64748B;
-  --text-dim:       #94A3B8;
+  --text-secondary: #1F2937;
+  --text-muted:     #334155;
+  --text-dim:       #475569;
   --ink:            #172033;
-  --muted:          #64748B;
+  --muted:          #334155;
 
   /* Accents */
   --gold:       #D97706;
@@ -123,7 +123,7 @@ input:focus {
 }
 
 input::placeholder {
-  color: var(--text-muted);
+  color: var(--text-dim);
   font-style: italic;
 }
 
